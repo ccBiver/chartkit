@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.0")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.1")
 ```
 
 Requires `minSdk 24` and Compose enabled. See [PUBLISHING.md](PUBLISHING.md) for coordinates, versions and release details.

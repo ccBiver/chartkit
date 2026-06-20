@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-20
+
+First version successfully published on JitPack.
+
+### Fixed
+- `gradle.properties` (with `android.useAndroidX=true`) was excluded by a global gitignore and never committed, so the 0.1.0 tag failed to build on JitPack. The file is now tracked; 0.1.0 is superseded by 0.1.1.
+
 ## [0.1.0] - 2026-06-20
 
 Initial public release.
