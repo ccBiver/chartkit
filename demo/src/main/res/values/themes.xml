@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No-action-bar framework theme; Compose provides the actual UI/material theming. -->
+    <style name="Theme.ChartkitDemo" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
