@@ -846,11 +846,16 @@ fun KLineChart(
             )
         }
 
-        // 主图底部 y（dp）：水印 / 全屏按钮共用
+        // 主图底部 y（dp）：水印 / 全屏按钮共用。
+        // 用与渲染层同一套公式（含副图动画权重 subWeights 与整体收缩 subScale），
+        // 把水印稳稳钉在主图区中心——增删副图时随主图平滑移动，不再因「参数 vs 动画」不同步而跳动。
         val chartHDp = totalH - dims.bottomAxisHeight
-        val subFrac = if (subIndicators.isNotEmpty()) (dims.subPaneFraction * subIndicators.size).coerceAtMost(0.5f) else 0f
         val volFrac = if (showVolume) dims.volumePaneFraction else 0f
-        val mainBottomDp = chartHDp * (1f - volFrac - subFrac)
+        val logoSubUnits = displayedSubs.fold(0f) { acc, ind -> acc + (subWeights[ind.id]?.value ?: 0f) }
+        val logoSubScale = if (logoSubUnits > 0f && dims.subPaneFraction * logoSubUnits > 0.5f)
+            0.5f / (dims.subPaneFraction * logoSubUnits) else 1f
+        val logoSubTotalDp = chartHDp * (dims.subPaneFraction * logoSubScale * logoSubUnits) + dims.paneGap * logoSubUnits
+        val mainBottomDp = chartHDp * (1f - volFrac) - logoSubTotalDp
 
         // —— Logo 水印：默认主图中心（类 Binance），位置 + 透明度可设 ——
         logo?.let { painter ->

@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp"
+    android:height="56dp"
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+    <!-- 蜡烛1（涨·绿）影线 + 实体 -->
+    <path android:fillColor="#26A69A" android:pathData="M13.5,26h1v24h-1z" />
+    <path android:fillColor="#26A69A" android:pathData="M11,32h6v14h-6z" />
+    <!-- 蜡烛2（跌·红） -->
+    <path android:fillColor="#EF5350" android:pathData="M27.5,16h1v26h-1z" />
+    <path android:fillColor="#EF5350" android:pathData="M25,22h6v14h-6z" />
+    <!-- 蜡烛3（涨·绿） -->
+    <path android:fillColor="#26A69A" android:pathData="M41.5,8h1v24h-1z" />
+    <path android:fillColor="#26A69A" android:pathData="M39,12h6v16h-6z" />
+</vector>

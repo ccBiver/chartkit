@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-20
+
+### Fixed
+- Logo watermark now anchors to the actual (animated) main-pane geometry, so it stays centered in the price pane and no longer drifts when sub-panes are toggled.
+
+### Changed
+- Demo: added a logo watermark and a short first-load delay so the skeleton screen is visible on launch.
+
 ## [0.1.1] - 2026-06-20
 
 First version successfully published on JitPack.

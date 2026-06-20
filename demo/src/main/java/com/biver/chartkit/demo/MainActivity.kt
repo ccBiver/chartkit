@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import com.biver.chartkit.demo.R
 import androidx.compose.ui.unit.dp
 import com.biver.chartkit.compose.ChartTheme
 import com.biver.chartkit.compose.KLineChart
@@ -49,6 +51,7 @@ import com.biver.chartkit.indicator.builtin.Sar
 import com.biver.chartkit.indicator.builtin.Wr
 import com.biver.chartkit.model.Candle
 import com.biver.chartkit.model.TimeFrame
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
@@ -79,7 +82,10 @@ private fun DemoScreen(dark: Boolean, onToggleTheme: () -> Unit) {
     // Regenerate sample data when the timeframe (bar spacing) changes → replays the entrance reveal.
     val candles = remember(timeFrame) { sampleCandles(intervalMs = timeFrame.millis) }
     val state = rememberKLineChartState(timeFrame = timeFrame)
-    LaunchedEffect(candles) { state.applyUpdate(KLineUpdate.RESET, candles) }
+    LaunchedEffect(candles) {
+        delay(1500)   // 首次加载延迟，先让骨架屏露脸
+        state.applyUpdate(KLineUpdate.RESET, candles)
+    }
 
     val mainIndicators = mainSel.mapNotNull {
         when (it) {
@@ -132,6 +138,8 @@ private fun DemoScreen(dark: Boolean, onToggleTheme: () -> Unit) {
                 upDownColor = UpDownColor.GreenUpRedDown,
                 mainIndicators = mainIndicators,
                 subIndicators = subIndicators,
+                logo = painterResource(R.drawable.ic_chartkit_logo),
+                logoAlpha = 0.18f,
             )
 
             ChipRow("Main (overlay)", MAIN_OPTIONS, selected = { it in mainSel }) {
