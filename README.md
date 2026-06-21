@@ -9,6 +9,12 @@
 - **指标后台计算** —— 在 `Dispatchers.Default` 计算，按数据版本合并高频 tick；实时 tick 只增量重算末根，不重算整条序列。
 - **易扩展** —— 一个 lambda 公式即可加主图/副图指标；副图可多选叠加。
 
+## 演示
+
+<video src="https://github.com/ccBiver/chartkit/raw/main/demo.mp4" controls width="360"></video>
+
+> 视频未加载时点此查看：[demo.mp4](demo.mp4)
+
 ```
 chartkit/
 ├── core/      # 纯 Kotlin/JVM：Candle、TimeFrame、Indicator + 内置指标（有单测）

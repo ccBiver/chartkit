@@ -9,6 +9,12 @@ A high-performance, extensible **K-line (candlestick) chart** for Android, built
 - **Off-main-thread indicators** — computed on `Dispatchers.Default`, coalesced per data version; live ticks recompute only the last bar (incremental), not the whole series.
 - **Extensible** — add a main/sub indicator from a single lambda; stack multiple sub-panes.
 
+## Demo
+
+<video src="https://github.com/ccBiver/chartkit/raw/main/demo.mp4" controls width="360"></video>
+
+> If the player doesn't load, open it here: [demo.mp4](demo.mp4)
+
 ```
 chartkit/
 ├── core/      # pure Kotlin/JVM: Candle, TimeFrame, Indicator + builtins (unit-tested)
