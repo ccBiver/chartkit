@@ -57,11 +57,21 @@ implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
 
 目标平台：`androidTarget`、`iosX64/iosArm64/iosSimulatorArm64`、`jvm`(Desktop)。API 与 Android 版一致，`@Composable fun KLineChart(...)` 直接在 `commonMain` 调用。差异：全屏（`launchChartFullscreen`，依赖 Android `Activity`）仅 Android 版提供，KMP 端用 `onToggleFullscreen` 回调由宿主自行实现。
 
-桌面端示例（用 `:kmp` 渲染，含周期/指标切换）：
+跨端示例 `:composeApp`（一份 `App()` 跑 Android / iOS / Desktop，含周期/指标切换、明暗主题）：
 
 ```bash
-./gradlew :demo-desktop:run
+# Desktop（直接弹窗）
+./gradlew :composeApp:run
+
+# Android（需连真机/模拟器，或用 Android Studio 选 composeApp 运行）
+./gradlew :composeApp:installDebug
+
+# iOS：用 Xcode 打开 iosApp/iosApp.xcodeproj，选模拟器 Run
+#（构建阶段会自动调 Gradle 生成并嵌入 ComposeApp.framework）
+open iosApp/iosApp.xcodeproj
 ```
+
+> `:demo`（Android 原生，基于 `chartkit-compose`）依旧可用：`./gradlew :demo:installDebug`。`:composeApp` 则走 KMP 的 `chartkit-kmp`。
 
 运行内置示例：`./gradlew :demo:installDebug`（见 [`demo/`](demo/)）。
 

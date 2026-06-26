@@ -1,4 +1,4 @@
-package com.biver.chartkit.demodesktop
+package com.biver.chartkit.demoapp
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -27,9 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
-import androidx.compose.ui.window.rememberWindowState
 import com.biver.chartkit.compose.ChartTheme
 import com.biver.chartkit.compose.KLineChart
 import com.biver.chartkit.compose.KLineUpdate
@@ -49,16 +46,12 @@ import com.biver.chartkit.model.TimeFrame
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
-fun main() = application {
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "chartkit desktop demo",
-        state = rememberWindowState(width = 440.dp, height = 880.dp),
-    ) {
-        var dark by remember { mutableStateOf(true) }
-        MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
-            DemoScreen(dark = dark, onToggleTheme = { dark = !dark })
-        }
+/** 跨端共享的 demo 界面（Android / iOS / Desktop 同一份）。 */
+@Composable
+fun App() {
+    var dark by remember { mutableStateOf(true) }
+    MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
+        DemoScreen(dark = dark, onToggleTheme = { dark = !dark })
     }
 }
 
@@ -112,7 +105,7 @@ private fun DemoScreen(dark: Boolean, onToggleTheme: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("chartkit desktop demo", style = MaterialTheme.typography.titleLarge)
+                Text("chartkit KMP demo", style = MaterialTheme.typography.titleLarge)
                 Button(onClick = onToggleTheme) { Text(if (dark) "Light" else "Dark") }
             }
 
@@ -166,7 +159,7 @@ private fun ChipRow(
 
 /**
  * Deterministic fake market data (no network): a seeded random walk with a drifting trend, irregular
- * bodies/wicks and volatility-scaled volume. Same generator as the Android demo.
+ * bodies/wicks and volatility-scaled volume.
  */
 private fun sampleCandles(
     n: Int = 240,
