@@ -26,6 +26,7 @@ data class ChartDims(
     val rightAxisWidth: Dp = 46.dp,      // 右侧价格刻度留白
     val bottomAxisHeight: Dp = 18.dp,    // 底部时间轴高度
     val paneGap: Dp = 6.dp,
+    val subLegendHeight: Dp = 16.dp,             // 副图顶部图例独占行高（数值不与指标重叠，类 Binance）
     val volumePaneFraction: Float = 0.16f,       // 成交量窗格占图高比例
     val subPaneFraction: Float = 0.18f,          // 每个副图窗格占图高比例
     val tradeMarkMaxVisibleBars: Int = 50,       // 可见 K 线超过此值时隐藏买卖标记

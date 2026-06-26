@@ -254,6 +254,8 @@ fun KLineChart(
 
     BoxWithConstraints(modifier) {
         val totalH = maxHeight
+        // 副图图例独占顶部一行（不与指标线/柱重叠）：副图总高 = 指标绘图高 + 该行高
+        val subLegendPx = with(density) { dims.subLegendHeight.toPx() }
         Canvas(
             modifier = Modifier
             .fillMaxSize()
@@ -398,7 +400,8 @@ fun KLineChart(
         val perSubFull = chartH * dims.subPaneFraction
         // 副图过多时整体缩放，避免挤掉主图
         val subScale = if (subUnits > 0f && perSubFull * subUnits > chartH * 0.5f) (chartH * 0.5f) / (perSubFull * subUnits) else 1f
-        val subPaneH = subWeightVals.map { perSubFull * it * subScale }
+        // 每格高 = 指标绘图高(perSubFull*subScale) + 图例行高(subLegendPx)，整体按动画权重伸缩
+        val subPaneH = subWeightVals.map { (perSubFull * subScale + subLegendPx) * it }
         val subTotalH = subPaneH.sum() + paneGap * subUnits
         val mainH = chartH - volH - subTotalH
         val mainTop = 0f
@@ -673,26 +676,18 @@ fun KLineChart(
             if (hasHist) { lo = min(lo, 0.0); hi = max(hi, 0.0) }
             if (hi - lo < 1e-9) hi = lo + 1.0
             // 内容按「稳定态完整高度 fullH」映射，再裁剪到当前可见高度：增/减时从头到脚显隐，而非压扁
+            // 顶部留出 subLegendPx 作为图例独占行，指标绘图区从 contentTop 起算（数值不再与指标重叠）
             val fullH = perSubFull * subScale
+            val contentTop = top + subLegendPx
             val visBottom = top + paneH
-            fun subY(v: Double) = yOf(v, top, top + fullH, lo, hi)
+            fun subY(v: Double) = yOf(v, contentTop, contentTop + fullH, lo, hi)
             clipRect(0f, top, size.width, visBottom) {
                 drawLine(theme.grid, Offset(0f, top), Offset(chartW, top), 1f)
-                // 右轴刻度（顶=hi，底=lo），右对齐贴右轴
+                // 右轴刻度（顶=hi，底=lo），右对齐贴右轴（对齐指标绘图区，非图例行）
                 val hiStr = formatter.price(hi)
                 val loStr = formatter.price(lo)
-                drawContext.canvas.nativeCanvas.drawText(hiStr, size.width - labelPad - axisPaint.measureText(hiStr), top + axisPaint.textSize, axisPaint)
-                drawContext.canvas.nativeCanvas.drawText(loStr, size.width - labelPad - axisPaint.measureText(loStr), top + fullH - 3f, axisPaint)
-                // 副图读数标签（聚焦根的各线当前值，按线着色）
-                var lx = 6f
-                s.lines.forEachIndexed { li, line ->
-                    axisPaint.color = theme.indicatorColors[li % theme.indicatorColors.size].toArgb()
-                    val vTxt = line.values.getOrNull(focusIdx)?.let { formatter.price(it) } ?: "--"
-                    val txt = "${line.name} $vTxt"
-                    drawContext.canvas.nativeCanvas.drawText(txt, lx, top + axisPaint.textSize + 1f, axisPaint)
-                    lx += axisPaint.measureText(txt) + 12f
-                }
-                axisPaint.color = theme.axisText.toArgb()
+                drawContext.canvas.nativeCanvas.drawText(hiStr, size.width - labelPad - axisPaint.measureText(hiStr), contentTop + axisPaint.textSize, axisPaint)
+                drawContext.canvas.nativeCanvas.drawText(loStr, size.width - labelPad - axisPaint.measureText(loStr), contentTop + fullH - 3f, axisPaint)
                 val bodyW = cw * (1f - dims.candleGapRatio)
                 s.lines.forEachIndexed { li, line ->
                     if (line.style == LineStyle.Histogram) {
@@ -711,6 +706,17 @@ fun KLineChart(
                         drawSeriesLine(line.values, firstIdx, revLast, ::centerX, { subY(it) }, col, 1f, mainPath)
                     }
                 }
+                // 副图读数标签（聚焦根的各线当前值，按线着色）：绘制在顶部独占的图例行内，垂直居中，不与指标重叠
+                val legendBaseline = top + subLegendPx / 2f + axisPaint.textSize / 3f
+                var lx = 6f
+                s.lines.forEachIndexed { li, line ->
+                    axisPaint.color = theme.indicatorColors[li % theme.indicatorColors.size].toArgb()
+                    val vTxt = line.values.getOrNull(focusIdx)?.let { formatter.price(it) } ?: "--"
+                    val txt = "${line.name} $vTxt"
+                    drawContext.canvas.nativeCanvas.drawText(txt, lx, legendBaseline, axisPaint)
+                    lx += axisPaint.measureText(txt) + 12f
+                }
+                axisPaint.color = theme.axisText.toArgb()
             }
         }
 
@@ -854,7 +860,9 @@ fun KLineChart(
         val logoSubUnits = displayedSubs.fold(0f) { acc, ind -> acc + (subWeights[ind.id]?.value ?: 0f) }
         val logoSubScale = if (logoSubUnits > 0f && dims.subPaneFraction * logoSubUnits > 0.5f)
             0.5f / (dims.subPaneFraction * logoSubUnits) else 1f
-        val logoSubTotalDp = chartHDp * (dims.subPaneFraction * logoSubScale * logoSubUnits) + dims.paneGap * logoSubUnits
+        // 与渲染层一致：每格高含图例行 subLegendHeight，故按权重计入
+        val logoSubTotalDp = chartHDp * (dims.subPaneFraction * logoSubScale * logoSubUnits) +
+            (dims.paneGap + dims.subLegendHeight) * logoSubUnits
         val mainBottomDp = chartHDp * (1f - volFrac) - logoSubTotalDp
 
         // —— Logo 水印：默认主图中心（类 Binance），位置 + 透明度可设 ——
