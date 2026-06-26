@@ -38,8 +38,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -193,26 +194,13 @@ fun KLineChart(
     // 分页节流：同一数据版本只触发一次 onLoadMore
     var loadMoreVersion by remember { mutableStateOf(-1) }
 
-    // 文本画笔（复用，避免每帧分配）
-    val axisPaint = remember {
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    }.apply {
-        textSize = with(density) { dims.axisTextSize.toPx() }
-        color = theme.axisText.toArgb()
-    }
-    val labelPaint = remember {
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    }.apply { textSize = with(density) { dims.axisTextSize.toPx() } }
-    val labelBgPaint = remember {
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    }.apply { color = theme.crosshairLabelBg.toArgb() }
-
-    val markPaint = remember {
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    }.apply {
-        textAlign = android.graphics.Paint.Align.CENTER
-        textSize = with(density) { dims.axisTextSize.toPx() }
-    }
+    // 多平台文本绘制（复用同一 TextMeasurer，逐帧测量结果由 Compose 内部缓存）
+    val textMeasurer = rememberTextMeasurer()
+    val axisText = remember(textMeasurer, dims.axisTextSize) { ChartText(textMeasurer, dims.axisTextSize) }
+    val axisTextPx = with(density) { dims.axisTextSize.toPx() }
+    // 买卖标记字形（固定 10sp，居中、白色）
+    val markText = remember(textMeasurer) { ChartText(textMeasurer, 10.sp) }
+    val markTextPx = with(density) { 10.sp.toPx() }
 
     val mainPath = remember { Path() }
     val fillPath = remember { Path() }
@@ -463,40 +451,33 @@ fun KLineChart(
         fun mainPrice(y: Float): Double = pMax - (y - mainTop) / (mainBottom - mainTop) * (pMax - pMin)
 
         // —— 右轴标签：以 y 为竖直中心绘制，上下对称留白（修正旧版底部无 padding）——
-        val labelFm = axisPaint.fontMetrics
-        val labelHalfH = (labelFm.descent - labelFm.ascent) / 2f + axisPaint.textSize * 0.3f
+        val labelHalfH = axisText.lineHeight / 2f + axisTextPx * 0.3f
         val labelPad = 4f
-        fun drawRightLabel(yCenter: Float, text: String, bg: Int, fg: Int) {
-            val tw = axisPaint.measureText(text)
+        fun drawRightLabel(yCenter: Float, text: String, bg: Color, fg: Color) {
+            val tw = axisText.measure(text)
             val cy = yCenter.coerceIn(labelHalfH, chartH - labelHalfH)
             // 贴右边缘、宽度随文本自适应：文本右对齐（右内边距 labelPad），左内边距相同 → 左右对称；
             // 价格长时整体向左生长，右边缘恒在画布内，保证完整不被裁。
             val textLeft = size.width - labelPad - tw
-            labelBgPaint.color = bg
-            drawContext.canvas.nativeCanvas.drawRoundRect(textLeft - labelPad, cy - labelHalfH, size.width, cy + labelHalfH, 5f, 5f, labelBgPaint)
-            labelPaint.color = fg
-            drawContext.canvas.nativeCanvas.drawText(text, textLeft, cy - (labelFm.ascent + labelFm.descent) / 2f, labelPaint)
+            drawRoundRect(bg, Offset(textLeft - labelPad, cy - labelHalfH), Size(size.width - (textLeft - labelPad), labelHalfH * 2f), CornerRadius(5f, 5f))
+            axisText.drawVCenterLeft(this, text, textLeft, cy, fg)
         }
         // —— 底轴标签：以 x 为中心绘制（十字光标时间）——
-        fun drawBottomLabel(xCenter: Float, text: String, bg: Int, fg: Int) {
-            val tw = axisPaint.measureText(text)
+        fun drawBottomLabel(xCenter: Float, text: String, bg: Color, fg: Color) {
+            val tw = axisText.measure(text)
             val halfW = tw / 2f + 8f
             val cx = xCenter.coerceIn(halfW, chartW - halfW)
-            labelBgPaint.color = bg
-            drawContext.canvas.nativeCanvas.drawRoundRect(cx - halfW, chartH + 1f, cx + halfW, size.height, 5f, 5f, labelBgPaint)
-            labelPaint.color = fg
+            drawRoundRect(bg, Offset(cx - halfW, chartH + 1f), Size(halfW * 2f, size.height - (chartH + 1f)), CornerRadius(5f, 5f))
             val cy = (chartH + size.height) / 2f
-            drawContext.canvas.nativeCanvas.drawText(text, cx - tw / 2f, cy - (labelFm.ascent + labelFm.descent) / 2f, labelPaint)
+            axisText.drawVCenterLeft(this, text, cx - tw / 2f, cy, fg)
         }
         // —— 浮动时间标签：以 (x, y) 为中心绘制（用于主图底部的十字光标时间）——
-        fun drawTimeTag(xCenter: Float, yCenter: Float, text: String, bg: Int, fg: Int) {
-            val tw = axisPaint.measureText(text)
+        fun drawTimeTag(xCenter: Float, yCenter: Float, text: String, bg: Color, fg: Color) {
+            val tw = axisText.measure(text)
             val halfW = tw / 2f + 8f
             val cx = xCenter.coerceIn(halfW, chartW - halfW)
-            labelBgPaint.color = bg
-            drawContext.canvas.nativeCanvas.drawRoundRect(cx - halfW, yCenter - labelHalfH, cx + halfW, yCenter + labelHalfH, 5f, 5f, labelBgPaint)
-            labelPaint.color = fg
-            drawContext.canvas.nativeCanvas.drawText(text, cx - tw / 2f, yCenter - (labelFm.ascent + labelFm.descent) / 2f, labelPaint)
+            drawRoundRect(bg, Offset(cx - halfW, yCenter - labelHalfH), Size(halfW * 2f, labelHalfH * 2f), CornerRadius(5f, 5f))
+            axisText.drawVCenterLeft(this, text, cx - tw / 2f, yCenter, fg)
         }
 
         // 入场：从最左过渡到最右——只绘制到 revLast（随 ease 0→1 推进），价格区间用全量保证刻度不跳
@@ -510,9 +491,7 @@ fun KLineChart(
             drawLine(theme.grid, Offset(0f, y), Offset(chartW, y), 1f)
             val p = pMax - (pMax - pMin) * r / theme.gridRows
             val ps = formatter.price(p)
-            drawContext.canvas.nativeCanvas.drawText(
-                ps, size.width - labelPad - axisPaint.measureText(ps), y + axisPaint.textSize / 3f, axisPaint
-            )
+            axisText.drawBaselineLeft(this, ps, size.width - labelPad - axisText.measure(ps), y + axisTextPx / 3f, theme.axisText)
         }
 
         val up = theme.upColor(upDownColor)
@@ -567,7 +546,6 @@ fun KLineChart(
             val ptrW = with(density) { 2.dp.toPx() }   // 三角半宽（全宽 4）
             val ptrH = with(density) { 3.dp.toPx() }
             val gap = with(density) { 2.dp.toPx() }
-            markPaint.textSize = with(density) { 10.sp.toPx() }
             val tri = Path()
             tradeMarks.forEach { m ->
                 val idx = indexForTime(m.time)
@@ -594,10 +572,8 @@ fun KLineChart(
                         androidx.compose.ui.geometry.CornerRadius(corner, corner),
                     )
                     drawPath(tri, color)
-                    markPaint.color = android.graphics.Color.WHITE
-                    drawContext.canvas.nativeCanvas.drawText(
-                        if (m.isBuy) "B" else "S", x, badgeTop + bh / 2f + markPaint.textSize / 3f, markPaint
-                    )
+                    val glyph = if (m.isBuy) "B" else "S"
+                    markText.drawBaselineLeft(this, glyph, x - markText.measure(glyph) / 2f, badgeTop + bh / 2f + markTextPx / 3f, Color.White)
                 }
             }
         }
@@ -613,7 +589,7 @@ fun KLineChart(
                     col, Offset(0f, y), Offset(chartW, y), 1f,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
                 )
-                drawRightLabel(y, formatter.price(rc), col.toArgb(), Color.White.toArgb())
+                drawRightLabel(y, formatter.price(rc), col, Color.White)
             }
             LastPriceMode.Latest -> {
                 // 业内标准：恒取最新价；落在可见区内则画线+标签，否则标签贴上/下边缘 + ↑/↓ 箭头
@@ -625,11 +601,11 @@ fun KLineChart(
                         col, Offset(0f, rawY), Offset(chartW, rawY), 1f,
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
                     )
-                    drawRightLabel(rawY, formatter.price(last.close), col.toArgb(), Color.White.toArgb())
+                    drawRightLabel(rawY, formatter.price(last.close), col, Color.White)
                 } else {
                     // 现价在可见区外：标签贴主图上/下沿（不画线、不加箭头）
                     val edgeY = if (rawY < mainTop) mainTop + labelHalfH else mainBottom - labelHalfH
-                    drawRightLabel(edgeY, formatter.price(last.close), col.toArgb(), Color.White.toArgb())
+                    drawRightLabel(edgeY, formatter.price(last.close), col, Color.White)
                 }
             }
         }
@@ -648,8 +624,8 @@ fun KLineChart(
             }
             // 右轴量纲刻度（顶=峰值，底=0），右对齐贴右轴
             val vMaxStr = abbrevNum(vMax)
-            drawContext.canvas.nativeCanvas.drawText(vMaxStr, size.width - labelPad - axisPaint.measureText(vMaxStr), volTop + axisPaint.textSize, axisPaint)
-            drawContext.canvas.nativeCanvas.drawText("0", size.width - labelPad - axisPaint.measureText("0"), volBottom - 3f, axisPaint)
+            axisText.drawBaselineLeft(this, vMaxStr, size.width - labelPad - axisText.measure(vMaxStr), volTop + axisTextPx, theme.axisText)
+            axisText.drawBaselineLeft(this, "0", size.width - labelPad - axisText.measure("0"), volBottom - 3f, theme.axisText)
         }
 
         // —— 副图窗格（每格按动画权重分配高度；收缩中的副图保留数据直到高度归零）——
@@ -686,8 +662,8 @@ fun KLineChart(
                 // 右轴刻度（顶=hi，底=lo），右对齐贴右轴（对齐指标绘图区，非图例行）
                 val hiStr = formatter.price(hi)
                 val loStr = formatter.price(lo)
-                drawContext.canvas.nativeCanvas.drawText(hiStr, size.width - labelPad - axisPaint.measureText(hiStr), contentTop + axisPaint.textSize, axisPaint)
-                drawContext.canvas.nativeCanvas.drawText(loStr, size.width - labelPad - axisPaint.measureText(loStr), contentTop + fullH - 3f, axisPaint)
+                axisText.drawBaselineLeft(this, hiStr, size.width - labelPad - axisText.measure(hiStr), contentTop + axisTextPx, theme.axisText)
+                axisText.drawBaselineLeft(this, loStr, size.width - labelPad - axisText.measure(loStr), contentTop + fullH - 3f, theme.axisText)
                 val bodyW = cw * (1f - dims.candleGapRatio)
                 s.lines.forEachIndexed { li, line ->
                     if (line.style == LineStyle.Histogram) {
@@ -707,16 +683,15 @@ fun KLineChart(
                     }
                 }
                 // 副图读数标签（聚焦根的各线当前值，按线着色）：绘制在顶部独占的图例行内，垂直居中，不与指标重叠
-                val legendBaseline = top + subLegendPx / 2f + axisPaint.textSize / 3f
+                val legendBaseline = top + subLegendPx / 2f + axisTextPx / 3f
                 var lx = 6f
                 s.lines.forEachIndexed { li, line ->
-                    axisPaint.color = theme.indicatorColors[li % theme.indicatorColors.size].toArgb()
+                    val col = theme.indicatorColors[li % theme.indicatorColors.size]
                     val vTxt = line.values.getOrNull(focusIdx)?.let { formatter.price(it) } ?: "--"
                     val txt = "${line.name} $vTxt"
-                    drawContext.canvas.nativeCanvas.drawText(txt, lx, legendBaseline, axisPaint)
-                    lx += axisPaint.measureText(txt) + 12f
+                    axisText.drawBaselineLeft(this, txt, lx, legendBaseline, col)
+                    lx += axisText.measure(txt) + 12f
                 }
-                axisPaint.color = theme.axisText.toArgb()
             }
         }
 
@@ -725,28 +700,25 @@ fun KLineChart(
 
         // —— 时间轴：按像素间距均匀放刻度，锚定到 step 整数倍（拖动时平滑、不挤在一起）——
         run {
-            val labelW = axisPaint.measureText(formatter.time(candles[lastIdx].time, state.timeFrame))
+            val labelW = axisText.measure(formatter.time(candles[lastIdx].time, state.timeFrame))
             // 间距取「标签宽 + 间隙」与「图宽/3」的较大者 → 一屏最多 3 个、且不重叠
             val minGap = max(labelW + 24f, chartW / 3f)
             val step = max(1, ceil(minGap / cw).toInt())
-            val baseAlpha = axisPaint.alpha
             val fadeMargin = 70f  // 距边缘多少像素内做淡入淡出
             var i = (firstIdx / step) * step
             if (i < firstIdx) i += step
             while (i <= lastIdx) {
                 val label = formatter.time(candles[i].time, state.timeFrame)
-                val w = axisPaint.measureText(label)
+                val w = axisText.measure(label)
                 val tx = centerX(i) - w / 2f
                 // 按距左右边缘的余量做透明度过渡：靠边→透明，进入→不透明（拖动时平滑淡入淡出）
                 val room = min(tx, chartW - (tx + w))
                 val a = (1f + room / fadeMargin).coerceIn(0f, 1f)
                 if (a > 0.02f) {
-                    axisPaint.alpha = (baseAlpha * a).toInt()
-                    drawContext.canvas.nativeCanvas.drawText(label, tx, size.height - 4f, axisPaint)
+                    axisText.drawBaselineLeft(this, label, tx, size.height - 4f, theme.axisText, alpha = a)
                 }
                 i += step
             }
-            axisPaint.alpha = baseAlpha
         }
 
         // —— 十字光标（含右侧留白：虚拟索引 > lastIndex 时无 K 线，跟手指 + 外推时间）——
@@ -767,10 +739,10 @@ fun KLineChart(
             // 右轴价格标签：跟手指→手指处价格（仅主图区内）；吸附→收盘价
             if (useFinger) {
                 if (hy <= mainBottom) {
-                    drawRightLabel(hy, formatter.price(mainPrice(hy.coerceIn(mainTop, mainBottom))), theme.crosshairLabelBg.toArgb(), theme.crosshairLabelText.toArgb())
+                    drawRightLabel(hy, formatter.price(mainPrice(hy.coerceIn(mainTop, mainBottom))), theme.crosshairLabelBg, theme.crosshairLabelText)
                 }
             } else if (c != null) {
-                drawRightLabel(hy, formatter.price(c.close), theme.crosshairLabelBg.toArgb(), theme.crosshairLabelText.toArgb())
+                drawRightLabel(hy, formatter.price(c.close), theme.crosshairLabelBg, theme.crosshairLabelText)
             }
             // 底轴时间标签：留白区按周期外推（lastTime + (ci-lastIndex)*周期毫秒）
             // 留白区无 K 线：按数据自身的每根间隔外推时间（不依赖 host 设 timeFrame）
@@ -779,10 +751,10 @@ fun KLineChart(
             else state.timeFrame.millis
             val t = c?.time ?: (candles.last().time + (ci - candles.lastIndex).toLong() * barMs)
             val timeStr = formatter.crosshairTime(t, state.timeFrame)
-            drawBottomLabel(x, timeStr, theme.crosshairLabelBg.toArgb(), theme.crosshairLabelText.toArgb())
+            drawBottomLabel(x, timeStr, theme.crosshairLabelBg, theme.crosshairLabelText)
             // 有副图时，主图底沿再放一个时间标签，避免还要跑到最底部时间轴去对照
             if (displayedSubs.isNotEmpty()) {
-                drawTimeTag(x, mainBottom, timeStr, theme.crosshairLabelBg.toArgb(), theme.crosshairLabelText.toArgb())
+                drawTimeTag(x, mainBottom, timeStr, theme.crosshairLabelBg, theme.crosshairLabelText)
             }
         }
         }
