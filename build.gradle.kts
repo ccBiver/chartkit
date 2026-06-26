@@ -11,4 +11,4 @@ plugins {
 }
 
 // Single source of truth for the published library version (shared by :core, :compose and :kmp).
-extra["chartkitVersion"] = "0.1.4"
+extra["chartkitVersion"] = "0.1.5"

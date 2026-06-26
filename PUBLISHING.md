@@ -18,13 +18,13 @@ chartkit publishes two artifacts (group `com.github.ccBiver.chartkit`, version f
 Then, in a project with `mavenLocal()` in its repositories:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.5")
 ```
 
 ## Release via JitPack (default channel)
 
 1. Push this repo to GitHub.
-2. Tag a release: `git tag 0.1.4 && git push origin 0.1.4`.
+2. Tag a release: `git tag 0.1.5 && git push origin 0.1.5`.
 3. Trigger a build on [jitpack.io](https://jitpack.io) for the tag (or just let the first consumer request it).
 
 `jitpack.yml` already pins JDK 17 and runs `publishToMavenLocal` for the two library modules:
@@ -49,10 +49,10 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.5")
 ```
 
-> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.4`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.4`) resolvable on JitPack, so consumers declare only the compose artifact.
+> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.5`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.5`) resolvable on JitPack, so consumers declare only the compose artifact.
 
 ## Compose Multiplatform (`chartkit-kmp`)
 
@@ -69,7 +69,7 @@ chartkit-kmp-iosx64 / -iosarm64 / -iossimulatorarm64
 Consumers depend only on the root coordinate from `commonMain`; Gradle resolves the right target via metadata:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
+implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.5")
 ```
 
 - Test locally with `./gradlew :kmp:publishToMavenLocal` (then `mavenLocal()` in a consumer). All six
@@ -92,6 +92,38 @@ Requires a Sonatype account, a verified namespace, and GPG signing:
 ## POM metadata
 
 `url` / `scm` / `developers` in both `build.gradle.kts` files are set to `ccBiver` / `github.com/ccBiver/chartkit`. If you later publish to Maven Central, change `group` to a namespace you own (and adjust the coordinates accordingly).
+
+## Local Maven mirrors (e.g. China) — keep them OUT of the repo
+
+`settings.gradle.kts` intentionally uses **official repositories only** (`google()`, `mavenCentral()`,
+`gradlePluginPortal()`, `jitpack`). Do **not** add China mirrors (aliyun/tencent) here: they are
+unreachable from JitPack's overseas builders and intermittently return 502, which breaks the build
+(this is what broke 0.1.3).
+
+For fast local builds, put mirrors in a **global** `~/.gradle/init.gradle.kts` instead — it applies to all
+your projects and never ships with the repo, so CI/JitPack stay on official sources:
+
+```kotlin
+// ~/.gradle/init.gradle.kts
+val aliyunPublic = "https://maven.aliyun.com/repository/public"
+val aliyunGoogle = "https://maven.aliyun.com/repository/google"
+val aliyunGradlePlugin = "https://maven.aliyun.com/repository/gradle-plugin"
+beforeSettings {
+    pluginManagement.repositories {
+        maven { url = uri(aliyunGradlePlugin) }
+        maven { url = uri(aliyunPublic) }
+        maven { url = uri(aliyunGoogle) }
+    }
+    @Suppress("UnstableApiUsage")
+    dependencyResolutionManagement.repositories {
+        maven { url = uri(aliyunPublic) }
+        maven { url = uri(aliyunGoogle) }
+    }
+}
+```
+
+`beforeSettings` injects the mirrors *before* each project's `settings.gradle.kts`, so locally they take
+priority; on CI the file is absent and resolution uses the official repos.
 
 ## Cutting a version
 

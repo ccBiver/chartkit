@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-26
+
+### Fixed
+- JitPack build reliability: removed the China-only Maven mirrors (aliyun) from `settings.gradle.kts`. They were listed first and 502'd intermittently on JitPack's overseas builders, breaking the 0.1.3 build. The repo now uses official repositories only; configure local mirrors via a global `~/.gradle/init.gradle.kts` instead (see PUBLISHING.md). Supersedes 0.1.4 (same flaw).
+
 ## [0.1.4] - 2026-06-26
 
 ### Added

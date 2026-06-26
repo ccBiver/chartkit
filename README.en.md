@@ -41,7 +41,7 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.5")
 ```
 
 Requires `minSdk 24` and Compose enabled. See [PUBLISHING.md](PUBLISHING.md) for coordinates, versions and release details.
@@ -54,7 +54,7 @@ For cross-platform use, depend on the KMP artifact `chartkit-kmp` (same renderin
 
 ```kotlin
 // commonMain
-implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
+implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.5")
 ```
 
 Targets: `androidTarget`, `iosX64/iosArm64/iosSimulatorArm64`, `jvm` (Desktop). The API matches the Android version — call `@Composable fun KLineChart(...)` directly from `commonMain`. Difference: fullscreen (`launchChartFullscreen`, which relies on an Android `Activity`) is Android-only; on KMP, drive fullscreen yourself via the `onToggleFullscreen` callback.
