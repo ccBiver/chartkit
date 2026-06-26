@@ -18,7 +18,8 @@ https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 ```
 chartkit/
 ├── core/      # pure Kotlin/JVM: Candle, TimeFrame, Indicator + builtins (unit-tested)
-└── compose/   # Android library: KLineChart composable, state, theme
+├── compose/   # Android library: KLineChart composable, state, theme
+└── kmp/       # Compose Multiplatform library (Android/iOS/Desktop), reuses core + compose sources → chartkit-kmp
 ```
 
 ---
@@ -38,12 +39,23 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
 ```
 
 Requires `minSdk 24` and Compose enabled. See [PUBLISHING.md](PUBLISHING.md) for coordinates, versions and release details.
 
 > Prefer to vendor the source? Copy `core/` and `compose/` into your project, `include(":core", ":compose")`, then `implementation(project(":compose"))`.
+
+### Compose Multiplatform (Android / iOS / Desktop)
+
+For cross-platform use, depend on the KMP artifact `chartkit-kmp` (same rendering code; native Android can still use `chartkit-compose` above):
+
+```kotlin
+// commonMain
+implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
+```
+
+Targets: `androidTarget`, `iosX64/iosArm64/iosSimulatorArm64`, `jvm` (Desktop). The API matches the Android version — call `@Composable fun KLineChart(...)` directly from `commonMain`. Difference: fullscreen (`launchChartFullscreen`, which relies on an Android `Activity`) is Android-only; on KMP, drive fullscreen yourself via the `onToggleFullscreen` callback.
 
 Run the bundled sample with `./gradlew :demo:installDebug` (see [`demo/`](demo/)).
 

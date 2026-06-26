@@ -18,7 +18,8 @@ https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 ```
 chartkit/
 ├── core/      # 纯 Kotlin/JVM：Candle、TimeFrame、Indicator + 内置指标（有单测）
-└── compose/   # Android 库：KLineChart 组合项、状态、主题
+├── compose/   # Android 库：KLineChart 组合项、状态、主题
+└── kmp/       # Compose Multiplatform 库（Android/iOS/Desktop），复用 core + compose 源码 → chartkit-kmp
 ```
 
 ---
@@ -38,12 +39,23 @@ dependencyResolutionManagement {
 }
 
 // 模块 build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
 ```
 
 要求 `minSdk 24`，已开启 Compose。坐标 / 版本 / 发布细节见 [PUBLISHING.md](PUBLISHING.md)。
 
 > 想直接内嵌源码？把 `core/`、`compose/` 拷进你的工程，`include(":core", ":compose")`，再 `implementation(project(":compose"))`。
+
+### Compose Multiplatform（Android / iOS / Desktop）
+
+需要跨端时用 KMP 版 `chartkit-kmp`（同一份渲染代码，Android 原生仍可用上面的 `chartkit-compose`）：
+
+```kotlin
+// commonMain
+implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
+```
+
+目标平台：`androidTarget`、`iosX64/iosArm64/iosSimulatorArm64`、`jvm`(Desktop)。API 与 Android 版一致，`@Composable fun KLineChart(...)` 直接在 `commonMain` 调用。差异：全屏（`launchChartFullscreen`，依赖 Android `Activity`）仅 Android 版提供，KMP 端用 `onToggleFullscreen` 回调由宿主自行实现。
 
 运行内置示例：`./gradlew :demo:installDebug`（见 [`demo/`](demo/)）。
 

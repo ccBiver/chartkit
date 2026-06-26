@@ -28,3 +28,4 @@ rootProject.name = "chartkit"
 include(":core")
 include(":compose")
 include(":demo")
+include(":kmp")

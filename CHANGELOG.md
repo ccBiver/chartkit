@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-26
+
+### Added
+- **Compose Multiplatform support** — new `:kmp` module published as `chartkit-kmp`, targeting Android, iOS (x64/arm64/simulatorArm64) and Desktop (JVM). Native Android consumers keep using `chartkit-compose` unchanged.
+
+### Changed
+- `:compose` renderer now draws text via Compose's multiplatform `TextMeasurer` instead of `android.graphics.Paint`/`nativeCanvas` (behavior-preserving), so the entire chart renderer is shared by the KMP module — a single source of truth, no duplicated rendering code.
+- Number formatting extracted to a multiplatform helper (`NumberFormat.kt`); `ChartFormatter` split into its own file (Android keeps `java.util.Calendar`; KMP uses `kotlinx-datetime`).
+
 ## [0.1.3] - 2026-06-26
 
 ### Fixed
