@@ -57,6 +57,12 @@ implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
 
 Targets: `androidTarget`, `iosX64/iosArm64/iosSimulatorArm64`, `jvm` (Desktop). The API matches the Android version — call `@Composable fun KLineChart(...)` directly from `commonMain`. Difference: fullscreen (`launchChartFullscreen`, which relies on an Android `Activity`) is Android-only; on KMP, drive fullscreen yourself via the `onToggleFullscreen` callback.
 
+Desktop sample (rendered via `:kmp`, with timeframe/indicator toggles):
+
+```bash
+./gradlew :demo-desktop:run
+```
+
 Run the bundled sample with `./gradlew :demo:installDebug` (see [`demo/`](demo/)).
 
 ---
