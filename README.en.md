@@ -11,9 +11,9 @@ A high-performance, extensible **K-line (candlestick) chart** for Android, built
 
 ## Demo
 
-<video src="https://github.com/ccBiver/chartkit/raw/main/demo.mp4" controls width="360"></video>
+![chartkit demo](demo.jpg)
 
-> If the player doesn't load, open it here: [demo.mp4](demo.mp4)
+https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 
 ```
 chartkit/
@@ -38,7 +38,7 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.2")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
 ```
 
 Requires `minSdk 24` and Compose enabled. See [PUBLISHING.md](PUBLISHING.md) for coordinates, versions and release details.

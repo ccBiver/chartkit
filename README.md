@@ -11,9 +11,9 @@
 
 ## 演示
 
-<video src="https://github.com/ccBiver/chartkit/raw/main/demo.mp4" controls width="360"></video>
+![chartkit demo](demo.jpg)
 
-> 视频未加载时点此查看：[demo.mp4](demo.mp4)
+https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 
 ```
 chartkit/
@@ -38,7 +38,7 @@ dependencyResolutionManagement {
 }
 
 // 模块 build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.2")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
 ```
 
 要求 `minSdk 24`，已开启 Compose。坐标 / 版本 / 发布细节见 [PUBLISHING.md](PUBLISHING.md)。

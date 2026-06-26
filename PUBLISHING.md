@@ -18,13 +18,13 @@ chartkit publishes two artifacts (group `com.github.ccBiver.chartkit`, version f
 Then, in a project with `mavenLocal()` in its repositories:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.2")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
 ```
 
 ## Release via JitPack (default channel)
 
 1. Push this repo to GitHub.
-2. Tag a release: `git tag 0.1.2 && git push origin 0.1.2`.
+2. Tag a release: `git tag 0.1.3 && git push origin 0.1.3`.
 3. Trigger a build on [jitpack.io](https://jitpack.io) for the tag (or just let the first consumer request it).
 
 `jitpack.yml` already pins JDK 17 and runs `publishToMavenLocal` for the two library modules:
@@ -49,10 +49,10 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.2")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
 ```
 
-> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.2`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.2`) resolvable on JitPack, so consumers declare only the compose artifact.
+> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.3`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.3`) resolvable on JitPack, so consumers declare only the compose artifact.
 
 ## Maven Central (optional, formal)
 

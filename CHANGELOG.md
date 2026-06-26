@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-26
+
+### Fixed
+- Sub-pane legend (e.g. MACD `DIF/DEA/MACD` readouts) now occupies its own row at the top of each sub-pane instead of overlapping the indicator bars/lines, so the values stay readable. Each sub-pane grows by the legend-row height (`Dims.subLegendHeight`), keeping the indicator drawing area unchanged.
+
+### Changed
+- Docs: demo video now embeds via a GitHub `user-attachments` link (plays inline on GitHub); added `demo.jpg` static preview and removed the 7 MB in-repo `demo.mp4`.
+
 ## [0.1.2] - 2026-06-20
 
 ### Fixed
