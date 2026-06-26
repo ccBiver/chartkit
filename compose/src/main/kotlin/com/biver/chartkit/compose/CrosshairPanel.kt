@@ -40,10 +40,10 @@ internal fun LegendItem(name: String, value: Double, color: Color, fmt: (Double)
 internal fun abbrevNum(v: Double): String {
     val a = abs(v)
     return when {
-        a >= 1e9 -> String.format("%.2fB", v / 1e9)
-        a >= 1e6 -> String.format("%.2fM", v / 1e6)
-        a >= 1e3 -> String.format("%.2fK", v / 1e3)
-        else -> String.format("%.2f", v)
+        a >= 1e9 -> fixed(v / 1e9, 2) + "B"
+        a >= 1e6 -> fixed(v / 1e6, 2) + "M"
+        a >= 1e3 -> fixed(v / 1e3, 2) + "K"
+        else -> fixed(v, 2)
     }
 }
 
@@ -61,7 +61,7 @@ internal fun defaultCrosshairRows(
     val amp = if (candle.close != 0.0) (candle.high - candle.low) / candle.close * 100.0 else 0.0
     val chColor = if (change >= 0) theme.upColor(upDownColor) else theme.downColor(upDownColor)
     val sign = if (change >= 0) "+" else ""
-    fun pct2(v: Double) = String.format(java.util.Locale.US, "%.2f", v)
+    fun pct2(v: Double) = fixed(v, 2)
     return listOf(
         CrosshairDetailRow(labels.time, formatter.crosshairTime(candle.time, timeFrame)),
         CrosshairDetailRow(labels.open, formatter.price(candle.open)),

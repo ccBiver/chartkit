@@ -18,13 +18,13 @@ chartkit publishes two artifacts (group `com.github.ccBiver.chartkit`, version f
 Then, in a project with `mavenLocal()` in its repositories:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
 ```
 
 ## Release via JitPack (default channel)
 
 1. Push this repo to GitHub.
-2. Tag a release: `git tag 0.1.3 && git push origin 0.1.3`.
+2. Tag a release: `git tag 0.1.4 && git push origin 0.1.4`.
 3. Trigger a build on [jitpack.io](https://jitpack.io) for the tag (or just let the first consumer request it).
 
 `jitpack.yml` already pins JDK 17 and runs `publishToMavenLocal` for the two library modules:
@@ -49,10 +49,37 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
 ```
 
-> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.3`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.3`) resolvable on JitPack, so consumers declare only the compose artifact.
+> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.4`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.4`) resolvable on JitPack, so consumers declare only the compose artifact.
+
+## Compose Multiplatform (`chartkit-kmp`)
+
+The `:kmp` module publishes the Compose Multiplatform variant (Android / iOS / Desktop). KMP produces
+one root module plus a per-target artifact, all under the same version:
+
+```
+chartkit-kmp            # root: Gradle Module Metadata (variant routing)
+chartkit-kmp-android
+chartkit-kmp-desktop
+chartkit-kmp-iosx64 / -iosarm64 / -iossimulatorarm64
+```
+
+Consumers depend only on the root coordinate from `commonMain`; Gradle resolves the right target via metadata:
+
+```kotlin
+implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
+```
+
+- Test locally with `./gradlew :kmp:publishToMavenLocal` (then `mavenLocal()` in a consumer). All six
+  coordinates above must appear under `~/.m2/.../com/github/ccBiver/chartkit/`.
+- The artifactId base is renamed from the module name (`kmp`) to `chartkit-kmp` in the `:kmp` build's
+  `afterEvaluate` publishing block (the Android publication is created late by AGP, hence `afterEvaluate`).
+- **JitPack caveat:** resolving KMP **Gradle Module Metadata** (needed for the iOS/Desktop variants) from
+  JitPack can be flaky — JitPack primarily serves plain Maven. The Android variant resolves like any AAR;
+  the iOS/Desktop klibs rely on metadata. If a consumer can't resolve a non-Android target via JitPack,
+  publish to Maven Central (below) instead, which fully supports KMP metadata.
 
 ## Maven Central (optional, formal)
 

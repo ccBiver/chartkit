@@ -2,7 +2,9 @@
 
 [简体中文](README.md) | English
 
-A high-performance, extensible **K-line (candlestick) chart** for Android, built entirely in Jetpack Compose. Inspired by the trading charts in OKX / Binance.
+[![](https://jitpack.io/v/ccBiver/chartkit.svg)](https://jitpack.io/#ccBiver/chartkit)
+
+A high-performance, extensible **K-line (candlestick) chart** built entirely in Jetpack Compose. Inspired by the trading charts in OKX / Binance. Available for **native Android** (`chartkit-compose`) and **Compose Multiplatform** (`chartkit-kmp`, Android / iOS / Desktop).
 
 - **Pure Compose** — everything draws on one `Canvas`; no `AndroidView`, no third-party chart engine.
 - **Smooth UX** — skeleton ghost chart before data arrives, entrance reveal animation, live rolling-number legend, continuous indicator lines, animated sub-pane add/remove, crossfade on timeframe switch.
@@ -18,7 +20,8 @@ https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 ```
 chartkit/
 ├── core/      # pure Kotlin/JVM: Candle, TimeFrame, Indicator + builtins (unit-tested)
-└── compose/   # Android library: KLineChart composable, state, theme
+├── compose/   # Android library: KLineChart composable, state, theme
+└── kmp/       # Compose Multiplatform library (Android/iOS/Desktop), reuses core + compose sources → chartkit-kmp
 ```
 
 ---
@@ -38,12 +41,39 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.3")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.4")
 ```
 
 Requires `minSdk 24` and Compose enabled. See [PUBLISHING.md](PUBLISHING.md) for coordinates, versions and release details.
 
 > Prefer to vendor the source? Copy `core/` and `compose/` into your project, `include(":core", ":compose")`, then `implementation(project(":compose"))`.
+
+### Compose Multiplatform (Android / iOS / Desktop)
+
+For cross-platform use, depend on the KMP artifact `chartkit-kmp` (same rendering code; native Android can still use `chartkit-compose` above):
+
+```kotlin
+// commonMain
+implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.4")
+```
+
+Targets: `androidTarget`, `iosX64/iosArm64/iosSimulatorArm64`, `jvm` (Desktop). The API matches the Android version — call `@Composable fun KLineChart(...)` directly from `commonMain`. Difference: fullscreen (`launchChartFullscreen`, which relies on an Android `Activity`) is Android-only; on KMP, drive fullscreen yourself via the `onToggleFullscreen` callback.
+
+Cross-platform sample `:composeApp` (one `App()` for Android / iOS / Desktop, with timeframe/indicator toggles and light/dark):
+
+```bash
+# Desktop (opens a window)
+./gradlew :composeApp:run
+
+# Android (needs a device/emulator, or run "composeApp" from Android Studio)
+./gradlew :composeApp:installDebug
+
+# iOS: open iosApp/iosApp.xcodeproj in Xcode, pick a simulator, Run
+#      (a build phase runs Gradle to produce & embed ComposeApp.framework)
+open iosApp/iosApp.xcodeproj
+```
+
+> `:demo` (native Android, on `chartkit-compose`) still works: `./gradlew :demo:installDebug`. `:composeApp` exercises the KMP `chartkit-kmp` path.
 
 Run the bundled sample with `./gradlew :demo:installDebug` (see [`demo/`](demo/)).
 
