@@ -2,7 +2,9 @@
 
 简体中文 | [English](README.en.md)
 
-完全用 Jetpack Compose 编写的**高性能、可扩展 K 线图**，参考 OKX / Binance 的行情图体验。
+[![](https://jitpack.io/v/ccBiver/chartkit.svg)](https://jitpack.io/#ccBiver/chartkit)
+
+完全用 Jetpack Compose 编写的**高性能、可扩展 K 线图**，参考 OKX / Binance 的行情图体验。提供 **Android 原生**（`chartkit-compose`）与 **Compose Multiplatform**（`chartkit-kmp`，Android / iOS / Desktop）两种接入。
 
 - **纯 Compose** —— 全部画在一个 `Canvas` 上；不用 `AndroidView`，不依赖第三方图表引擎。
 - **流畅体验** —— 数据到达前先显示骨架行情（幽灵 K 线）、入场揭示动画、实时滚动数字图例、连续的指标线、副图增删卷帘动画、切周期淡入淡出。

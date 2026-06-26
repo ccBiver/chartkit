@@ -2,7 +2,9 @@
 
 [简体中文](README.md) | English
 
-A high-performance, extensible **K-line (candlestick) chart** for Android, built entirely in Jetpack Compose. Inspired by the trading charts in OKX / Binance.
+[![](https://jitpack.io/v/ccBiver/chartkit.svg)](https://jitpack.io/#ccBiver/chartkit)
+
+A high-performance, extensible **K-line (candlestick) chart** built entirely in Jetpack Compose. Inspired by the trading charts in OKX / Binance. Available for **native Android** (`chartkit-compose`) and **Compose Multiplatform** (`chartkit-kmp`, Android / iOS / Desktop).
 
 - **Pure Compose** — everything draws on one `Canvas`; no `AndroidView`, no third-party chart engine.
 - **Smooth UX** — skeleton ghost chart before data arrives, entrance reveal animation, live rolling-number legend, continuous indicator lines, animated sub-pane add/remove, crossfade on timeframe switch.
