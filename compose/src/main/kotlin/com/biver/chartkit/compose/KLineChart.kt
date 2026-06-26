@@ -194,8 +194,10 @@ fun KLineChart(
     // 分页节流：同一数据版本只触发一次 onLoadMore
     var loadMoreVersion by remember { mutableStateOf(-1) }
 
-    // 多平台文本绘制（复用同一 TextMeasurer，逐帧测量结果由 Compose 内部缓存）
-    val textMeasurer = rememberTextMeasurer()
+    // 多平台文本绘制（复用同一 TextMeasurer，逐帧测量结果由 Compose 内部缓存）。
+    // 默认缓存仅 8 条，而每帧要测量的标签（网格价/右轴/副图图例/时间轴…）远多于此，
+    // 缓存击穿会导致每帧重新排版——在 iOS（Kotlin/Native debug）上尤其卡，故放大缓存。
+    val textMeasurer = rememberTextMeasurer(cacheSize = 64)
     val axisText = remember(textMeasurer, dims.axisTextSize) { ChartText(textMeasurer, dims.axisTextSize) }
     val axisTextPx = with(density) { dims.axisTextSize.toPx() }
     // 买卖标记字形（固定 10sp，居中、白色）
