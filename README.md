@@ -41,7 +41,7 @@ dependencyResolutionManagement {
 }
 
 // 模块 build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.6")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.7")
 ```
 
 要求 `minSdk 24`，已开启 Compose。坐标 / 版本 / 发布细节见 [PUBLISHING.md](PUBLISHING.md)。
@@ -56,7 +56,7 @@ implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.6")
 
 ```kotlin
 // commonMain
-implementation("io.github.ccbiver:chartkit-kmp:0.1.6")
+implementation("io.github.ccbiver:chartkit-kmp:0.1.7")
 ```
 
 目标平台：`androidTarget`、`iosX64/iosArm64/iosSimulatorArm64`、`jvm`(Desktop)。API 与 Android 版一致，`@Composable fun KLineChart(...)` 直接在 `commonMain` 调用。差异：全屏（`launchChartFullscreen`，依赖 Android `Activity`）仅 Android 版提供，KMP 端用 `onToggleFullscreen` 回调由宿主自行实现。
