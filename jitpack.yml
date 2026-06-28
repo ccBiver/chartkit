@@ -1,4 +1,9 @@
 jdk:
   - openjdk17
 install:
+  # JitPack serves ONLY the Android/JVM artifacts (:core, :compose). The Compose Multiplatform
+  # module (:kmp / chartkit-kmp) is intentionally NOT built here: JitPack's builders are Linux-only
+  # and Kotlin/Native Apple targets (iosX64/iosArm64/iosSimulatorArm64) can only be compiled on macOS,
+  # so JitPack cannot produce the iOS klibs. chartkit-kmp ships via Maven Central instead
+  # (io.github.ccbiver:chartkit-kmp) — see PUBLISHING.md.
   - ./gradlew :core:publishToMavenLocal :compose:publishToMavenLocal

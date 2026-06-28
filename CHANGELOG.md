@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-29
+
+### Changed
+- **`chartkit-kmp` now ships on Maven Central** (namespace `io.github.ccbiver`) instead of JitPack. JitPack's builders are Linux-only and Kotlin/Native Apple targets (`iosX64`/`iosArm64`/`iosSimulatorArm64`) can only be compiled on macOS, so JitPack could not produce the iOS klibs — its `chartkit-kmp` POM/metadata 404'd and the iOS variants never resolved. The `:kmp` module now publishes via `com.vanniktech.maven.publish`, emitting the full Gradle Module Metadata + every target (Android AAR, Desktop jar, three iOS klibs) with signing. New consumer coordinate: `io.github.ccbiver:chartkit-kmp:0.1.6`.
+- `:core` and `:compose` are unchanged and continue to publish on JitPack (`com.github.ccBiver.chartkit`); `jitpack.yml` no longer attempts to build `:kmp`.
+
 ## [0.1.5] - 2026-06-26
 
 ### Fixed

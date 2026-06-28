@@ -1,13 +1,14 @@
 # Publishing chartkit
 
-chartkit publishes two artifacts (group `com.github.ccBiver.chartkit`, version from `chartkitVersion` in the root `build.gradle.kts`):
+chartkit publishes three library artifacts (version from `chartkitVersion` in the root `build.gradle.kts`):
 
-| Module | artifactId | Type |
-|---|---|---|
-| `:core` | `chartkit-core` | JVM jar (+ sources) |
-| `:compose` | `chartkit-compose` | Android AAR (+ sources) |
+| Module | artifactId | Type | Channel |
+|---|---|---|---|
+| `:core` | `chartkit-core` | JVM jar (+ sources) | JitPack (`com.github.ccBiver.chartkit`) |
+| `:compose` | `chartkit-compose` | Android AAR (+ sources) | JitPack (`com.github.ccBiver.chartkit`) |
+| `:kmp` | `chartkit-kmp` | Compose Multiplatform (Android/iOS/Desktop) | **Maven Central** (`io.github.ccbiver`) |
 
-`chartkit-compose` declares an `api` dependency on `chartkit-core`, so consumers only need the compose artifact. The `:demo` app is **not** published.
+`chartkit-compose` declares an `api` dependency on `chartkit-core`, so consumers only need the compose artifact. The `:demo` app is **not** published. The KMP variant `chartkit-kmp` is self-contained (it inlines the `:core` + `:compose` sources via `srcDir`) and ships on Maven Central because its iOS klibs cannot be built on JitPack — see [Compose Multiplatform (`chartkit-kmp`) → Maven Central](#compose-multiplatform-chartkit-kmp--maven-central).
 
 ## Verify locally
 
@@ -18,13 +19,13 @@ chartkit publishes two artifacts (group `com.github.ccBiver.chartkit`, version f
 Then, in a project with `mavenLocal()` in its repositories:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.5")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.6")
 ```
 
 ## Release via JitPack (default channel)
 
 1. Push this repo to GitHub.
-2. Tag a release: `git tag 0.1.5 && git push origin 0.1.5`.
+2. Tag a release: `git tag 0.1.6 && git push origin 0.1.6`.
 3. Trigger a build on [jitpack.io](https://jitpack.io) for the tag (or just let the first consumer request it).
 
 `jitpack.yml` already pins JDK 17 and runs `publishToMavenLocal` for the two library modules:
@@ -49,15 +50,22 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.5")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.6")
 ```
 
-> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.5`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.5`) resolvable on JitPack, so consumers declare only the compose artifact.
+> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.6`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.6`) resolvable on JitPack, so consumers declare only the compose artifact.
 
-## Compose Multiplatform (`chartkit-kmp`)
+## Compose Multiplatform (`chartkit-kmp`) → Maven Central
 
-The `:kmp` module publishes the Compose Multiplatform variant (Android / iOS / Desktop). KMP produces
-one root module plus a per-target artifact, all under the same version:
+> **Why not JitPack?** JitPack's build machines are **Linux-only**, and Kotlin/Native **Apple targets
+> (iosX64 / iosArm64 / iosSimulatorArm64) can only be compiled on macOS**. So JitPack *structurally
+> cannot* produce the iOS klibs — the 404 / timeout / empty-metadata symptoms for `chartkit-kmp` on
+> JitPack are not "flaky", they are a hard limitation. The Compose Multiplatform variant therefore
+> ships via **Maven Central**, published from a Mac. (`:core` / `:compose` remain fine on JitPack —
+> they are Android/JVM only.)
+
+The `:kmp` module publishes via the **`com.vanniktech.maven.publish`** plugin under the namespace
+`io.github.ccbiver`. KMP produces one root module plus a per-target artifact, all under the same version:
 
 ```
 chartkit-kmp            # root: Gradle Module Metadata (variant routing)
@@ -66,32 +74,62 @@ chartkit-kmp-desktop
 chartkit-kmp-iosx64 / -iosarm64 / -iossimulatorarm64
 ```
 
-Consumers depend only on the root coordinate from `commonMain`; Gradle resolves the right target via metadata:
+### Consume
+
+Consumers depend only on the root coordinate from `commonMain`; Gradle resolves the right target via
+the published `.module` metadata. Add `mavenCentral()` (already standard) — no JitPack needed for KMP:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-kmp:0.1.5")
+implementation("io.github.ccbiver:chartkit-kmp:0.1.6")
 ```
 
-- Test locally with `./gradlew :kmp:publishToMavenLocal` (then `mavenLocal()` in a consumer). All six
-  coordinates above must appear under `~/.m2/.../com/github/ccBiver/chartkit/`.
-- The artifactId base is renamed from the module name (`kmp`) to `chartkit-kmp` in the `:kmp` build's
-  `afterEvaluate` publishing block (the Android publication is created late by AGP, hence `afterEvaluate`).
-- **JitPack caveat:** resolving KMP **Gradle Module Metadata** (needed for the iOS/Desktop variants) from
-  JitPack can be flaky — JitPack primarily serves plain Maven. The Android variant resolves like any AAR;
-  the iOS/Desktop klibs rely on metadata. If a consumer can't resolve a non-Android target via JitPack,
-  publish to Maven Central (below) instead, which fully supports KMP metadata.
+### Verify locally (no keys needed)
 
-## Maven Central (optional, formal)
+```bash
+./gradlew :kmp:publishToMavenLocal
+# All six coordinates land under ~/.m2/.../io/github/ccbiver/ ; confirm the iOS variants:
+grep -ioE "iosX64|iosArm64|iosSimulatorArm64" \
+  ~/.m2/repository/io/github/ccbiver/chartkit-kmp/0.1.6/chartkit-kmp-0.1.6.module | sort -u
+```
 
-Requires a Sonatype account, a verified namespace, and GPG signing:
+A consumer on the **same machine** can use this immediately via `mavenLocal()`.
 
-- Change `group` to a namespace you own (e.g. `io.github.<user>`).
-- Add the `signing` plugin and a Central publishing repository (or the `vanniktech` / `gradle-nexus` publish plugin).
-- Supply signing keys + credentials via environment variables / `~/.gradle/gradle.properties` — never commit them.
+### Publish to Maven Central
+
+One-time setup:
+
+1. **Sonatype Central account** at <https://central.sonatype.com>; verify the `io.github.ccbiver`
+   namespace (it issues a TXT/repo challenge tied to the `ccBiver` GitHub account). Generate a
+   **user token** (username + password) under *Account → Generate User Token*.
+2. **GPG key** for signing: `gpg --gen-key`, publish the public key to a keyserver
+   (`gpg --keyserver keyserver.ubuntu.com --send-keys <KEYID>`), and export the **ASCII-armored secret
+   key**: `gpg --armor --export-secret-keys <KEYID>`.
+
+Supply credentials **out-of-band — never commit them** (use `~/.gradle/gradle.properties` or env vars):
+
+```properties
+# ~/.gradle/gradle.properties  (global, outside the repo)
+mavenCentralUsername=<central-portal-token-username>
+mavenCentralPassword=<central-portal-token-password>
+signingInMemoryKey=-----BEGIN PGP PRIVATE KEY BLOCK-----\n...\n-----END...   # or via env
+signingInMemoryKeyPassword=<gpg-key-passphrase>
+```
+
+Then publish + auto-release:
+
+```bash
+./gradlew :kmp:publishAndReleaseToMavenCentral --no-configuration-cache
+```
+
+- Signing is **conditional**: the build only signs when `signingInMemoryKey` is present, so the local
+  `publishToMavenLocal` verification runs key-free while the real Central publish always signs (Central
+  rejects unsigned uploads).
+- The artifactId is set to `chartkit-kmp` via `mavenPublishing { coordinates(...) }`; vanniktech
+  auto-configures all KMP publications (root metadata + every target) and the required sources/javadoc jars.
 
 ## POM metadata
 
-`url` / `scm` / `developers` in both `build.gradle.kts` files are set to `ccBiver` / `github.com/ccBiver/chartkit`. If you later publish to Maven Central, change `group` to a namespace you own (and adjust the coordinates accordingly).
+`url` / `scm` / `developers` are set to `ccBiver` / `github.com/ccBiver/chartkit` across the modules. `:core` / `:compose` keep the JitPack group `com.github.ccBiver.chartkit`; `:kmp` uses the owned Maven Central namespace `io.github.ccbiver` (configured in `kmp/build.gradle.kts` via `mavenPublishing { coordinates(...) }`).
 
 ## Local Maven mirrors (e.g. China) — keep them OUT of the repo
 
