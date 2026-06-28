@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-29
+
+### Fixed
+- **`chartkit-kmp`: removed the hard dependency on kotlinx-datetime**, fixing a runtime `NoClassDefFoundError: kotlinx.datetime.Instant` for consumers that also pull kotlinx-datetime 0.7+. kotlinx-datetime 0.7.0 removed `kotlinx.datetime.Instant` (moved to `kotlin.time.Instant`); when a consumer's other dependency (e.g. `compottie` → `keight-core`) forced datetime up to 0.7.1, Gradle upgraded chartkit's resolved 0.6.1 → 0.7.1 and the default `ChartFormatter` crashed at runtime. The default time formatter now reads local-time fields via platform calendars through `expect`/`actual` (`PlatformTime.kt`: `java.util.Calendar` on Android/Desktop, `NSCalendar`/`NSDate` on iOS), so chartkit is fully decoupled from any kotlinx-datetime version.
+
 ## [0.1.6] - 2026-06-29
 
 ### Changed

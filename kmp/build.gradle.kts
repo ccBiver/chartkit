@@ -58,7 +58,10 @@ kotlin {
                 implementation(compose.ui)
                 implementation(compose.animation)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+                // NOTE: chartkit no longer depends on kotlinx-datetime. The default time formatter
+                // uses platform calendars via expect/actual (PlatformTime.kt). This avoids a runtime
+                // crash when a consumer pulls kotlinx-datetime 0.7+ (which removed kotlinx.datetime.Instant),
+                // since Gradle would otherwise force chartkit's resolved version up and break it.
             }
         }
         val commonTest by getting {
