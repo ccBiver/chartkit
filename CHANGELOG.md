@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versioning follo
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-01
+
+### Fixed
+- **Right-axis price labels no longer overlap the candles.** The right axis reserved a fixed `rightAxisWidth` (46dp) while price labels are right-aligned and grow leftward, so a label wider than the reserve (long / high-precision prices, which vary per symbol) overflowed onto the plot. The right-axis width is now **adaptive**: it reserves at least the widest visible price label (`max(rightAxisWidth, widestLabel + padding)`), so candles never underlap the price scale regardless of decimal precision or platform. `dims.rightAxisWidth` now acts as a lower bound. Affects both `chartkit-compose` and `chartkit-kmp` (shared renderer).
+
+### Added
+- `KLineChart(resetAnimation: Boolean = entranceAnimation)` — separates the reveal animation of the **first load** (`entranceAnimation`) from **subsequent full updates** (RESET, e.g. timeframe switch). Set `resetAnimation = false` to switch timeframes instantly without replaying the exit→enter animation. Single-candle updates/appends (LATEST) and load-more (MORE) never animate. Default preserves prior behavior.
+
 ## [0.1.7] - 2026-06-29
 
 ### Fixed

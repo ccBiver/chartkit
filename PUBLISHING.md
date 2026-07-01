@@ -19,13 +19,13 @@ chartkit publishes three library artifacts (version from `chartkitVersion` in th
 Then, in a project with `mavenLocal()` in its repositories:
 
 ```kotlin
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.7")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.8")
 ```
 
 ## Release via JitPack (default channel)
 
 1. Push this repo to GitHub.
-2. Tag a release: `git tag 0.1.7 && git push origin 0.1.7`.
+2. Tag a release: `git tag 0.1.8 && git push origin 0.1.8`.
 3. Trigger a build on [jitpack.io](https://jitpack.io) for the tag (or just let the first consumer request it).
 
 `jitpack.yml` already pins JDK 17 and runs `publishToMavenLocal` for the two library modules:
@@ -50,10 +50,10 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.7")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.8")
 ```
 
-> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.7`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.7`) resolvable on JitPack, so consumers declare only the compose artifact.
+> The library's Maven `group` is set to `com.github.ccBiver.chartkit` (matching JitPack's coordinate) and the git **tag must equal the version** (`0.1.8`, no `v` prefix). This keeps the compose → core transitive dependency (`com.github.ccBiver.chartkit:chartkit-core:0.1.8`) resolvable on JitPack, so consumers declare only the compose artifact.
 
 ## Compose Multiplatform (`chartkit-kmp`) → Maven Central
 
@@ -80,7 +80,7 @@ Consumers depend only on the root coordinate from `commonMain`; Gradle resolves 
 the published `.module` metadata. Add `mavenCentral()` (already standard) — no JitPack needed for KMP:
 
 ```kotlin
-implementation("io.github.ccbiver:chartkit-kmp:0.1.7")
+implementation("io.github.ccbiver:chartkit-kmp:0.1.8")
 ```
 
 ### Verify locally (no keys needed)
@@ -89,7 +89,7 @@ implementation("io.github.ccbiver:chartkit-kmp:0.1.7")
 ./gradlew :kmp:publishToMavenLocal
 # All six coordinates land under ~/.m2/.../io/github/ccbiver/ ; confirm the iOS variants:
 grep -ioE "iosX64|iosArm64|iosSimulatorArm64" \
-  ~/.m2/repository/io/github/ccbiver/chartkit-kmp/0.1.7/chartkit-kmp-0.1.7.module | sort -u
+  ~/.m2/repository/io/github/ccbiver/chartkit-kmp/0.1.8/chartkit-kmp-0.1.8.module | sort -u
 ```
 
 A consumer on the **same machine** can use this immediately via `mavenLocal()`.

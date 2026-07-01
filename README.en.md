@@ -41,7 +41,7 @@ dependencyResolutionManagement {
 }
 
 // module build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.7")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.8")
 ```
 
 Requires `minSdk 24` and Compose enabled. See [PUBLISHING.md](PUBLISHING.md) for coordinates, versions and release details.
@@ -54,7 +54,7 @@ For cross-platform use, depend on the KMP artifact `chartkit-kmp` (same renderin
 
 ```kotlin
 // commonMain
-implementation("io.github.ccbiver:chartkit-kmp:0.1.7")
+implementation("io.github.ccbiver:chartkit-kmp:0.1.8")
 ```
 
 Targets: `androidTarget`, `iosX64/iosArm64/iosSimulatorArm64`, `jvm` (Desktop). The API matches the Android version — call `@Composable fun KLineChart(...)` directly from `commonMain`. Difference: fullscreen (`launchChartFullscreen`, which relies on an Android `Activity`) is Android-only; on KMP, drive fullscreen yourself via the `onToggleFullscreen` callback.
@@ -124,7 +124,8 @@ Change behavior by passing these to the composable. All have sensible defaults.
 | `mainIndicators` | `List<Indicator>` | `[]` | Overlays on the price pane, e.g. `listOf(Ma(), Boll(20, 2.0))`. |
 | `subIndicators` | `List<Indicator>` | `[]` | Each becomes its own stacked sub-pane, e.g. `listOf(Macd(), Kdj())`. |
 | `formatter` | `ChartFormatter` | `Default` | Price/volume/time formatting (precision, thousands, locale). |
-| `entranceAnimation` | `Boolean` | `true` | Left→right reveal on first load / timeframe switch. Set `false` to disable. |
+| `entranceAnimation` | `Boolean` | `true` | Left→right reveal on **first load**. Set `false` to disable. |
+| `resetAnimation` | `Boolean` | `= entranceAnimation` | Exit→enter animation on **subsequent full updates (RESET, e.g. timeframe switch)**. Set `false` so switching timeframes swaps instantly without replaying it (first load still honors `entranceAnimation`). Single-candle updates / appends (LATEST) and load-more (MORE) never animate. |
 | `showVolume` | `Boolean` | `true` | Show the volume pane. |
 | `tradeMarks` | `List<TradeMark>` | `[]` | Buy/sell markers on bars (clickable). |
 | `logo` | `Painter?` | `null` | Watermark image. `painterResource(R.drawable.x)`. |

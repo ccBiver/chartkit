@@ -108,6 +108,7 @@ fun KLineChart(
     subIndicators: List<Indicator> = emptyList(),
     formatter: ChartFormatter = ChartFormatter.Default,
     entranceAnimation: Boolean = true,
+    resetAnimation: Boolean = entranceAnimation,
     showVolume: Boolean = true,
     tradeMarks: List<TradeMark> = emptyList(),
     logo: Painter? = null,
@@ -179,10 +180,20 @@ fun KLineChart(
 
     val geo = remember { ChartGeometry() }
 
-    // 入场/换周期动画：首屏 0→1 从左往右展开；切周期(setData→resetVersion)时先往左收(1→0)再从左往右(0→1)
+    // 入场/换周期动画：首屏 0→1 从左往右展开；切周期(setData→resetVersion)时先往左收(1→0)再从左往右(0→1)。
+    // 首屏由 [entranceAnimation] 控制；后续全量更新(RESET，如切周期)由 [resetAnimation] 独立控制，
+    // 关掉后切周期直接切换、不再重播退出/进入动画。
     val entrance = remember { Animatable(if (entranceAnimation) 0f else 1f) }
+    val firstReveal = remember { booleanArrayOf(true) }
     LaunchedEffect(state.resetVersion) {
-        if (!entranceAnimation || state.candles.isEmpty()) return@LaunchedEffect
+        val isFirst = firstReveal[0]
+        firstReveal[0] = false
+        if (state.candles.isEmpty()) return@LaunchedEffect
+        val animate = if (isFirst) entranceAnimation else resetAnimation
+        if (!animate) {
+            entrance.snapTo(1f)                                              // 直接完整显示，不播动画
+            return@LaunchedEffect
+        }
         if (entrance.value >= 1f) {
             entrance.animateTo(0f, tween(340, easing = FastOutSlowInEasing))  // 往左收 + 淡出
         } else {
@@ -377,11 +388,49 @@ fun KLineChart(
             return@Canvas
         }
 
-        val rightAxis = with(density) { dims.rightAxisWidth.toPx() }
         val bottomAxis = with(density) { dims.bottomAxisHeight.toPx() }
         val paneGap = with(density) { dims.paneGap.toPx() }
-        val chartW = size.width - rightAxis
         val chartH = size.height - bottomAxis
+
+        // 候选蜡烛宽（首帧用默认）——与 chartW 无关，提前算好供自适应右轴复用
+        val cw = if (state.candleWidthPx > 0f) state.candleWidthPx
+        else with(density) { dims.candleDefaultWidth.toPx() }.also { state.candleWidthPx = it }
+        val labelPad = 4f
+
+        // 给定右轴留白 cW 时的可见 K 线区间
+        fun visibleRange(cW: Float): Pair<Int, Int> {
+            val maxOff = max(0f, candles.size * cw - cW)
+            val minOff = if (blankScrollRatio > 0f) -cW * blankScrollRatio.coerceAtMost(0.9f) else 0f
+            val off = state.scrollOffsetPx.coerceIn(minOff, maxOff)
+            val rf = candles.lastIndex - off / cw
+            val fi = floor(rf - cW / cw).toInt().coerceIn(0, candles.lastIndex)
+            val li = ceil(rf).toInt().coerceIn(0, candles.lastIndex)
+            return fi to li
+        }
+        // 主图价格区间（含主指标线，避免裁切），返回已含 6% 上下留白的 (min, max)
+        fun priceRange(fi: Int, li: Int): Pair<Double, Double> {
+            var lo = Double.MAX_VALUE; var hi = -Double.MAX_VALUE
+            for (i in fi..li) { lo = min(lo, candles[i].low); hi = max(hi, candles[i].high) }
+            mainSeries.forEach { s ->
+                s.lines.forEach { line ->
+                    for (i in fi..li) line.values.getOrNull(i)?.let { lo = min(lo, it); hi = max(hi, it) }
+                }
+            }
+            if (lo == Double.MAX_VALUE) { lo = 0.0; hi = 1.0 }
+            if (hi - lo < 1e-9) hi = lo + 1.0
+            val p = (hi - lo) * 0.06
+            return (lo - p) to (hi + p)
+        }
+
+        // —— 自适应右轴留白：先用最小留白粗算可见价格区间，量出最宽价格标签，
+        //    据此把右轴撑到「最长价格 + 内边距」，蜡烛区从此不会被价格标签压住。
+        //    dims.rightAxisWidth 退化为下限；精度随币种变化（后台返回）也能自适应。——
+        val rightAxisMin = with(density) { dims.rightAxisWidth.toPx() }
+        val (rf0, rl0) = visibleRange(size.width - rightAxisMin)
+        val (pmin0, pmax0) = priceRange(rf0, rl0)
+        val widestLabel = max(axisText.measure(formatter.price(pmax0)), axisText.measure(formatter.price(pmin0)))
+        val rightAxis = max(rightAxisMin, widestLabel + labelPad * 2f)
+        val chartW = size.width - rightAxis
 
         // 窗格高度分配：主图 + (成交量) + 各副图。副图按各自动画权重分配（增长出/减收缩，互不挤压）
         val volH = if (showVolume) chartH * dims.volumePaneFraction else 0f
@@ -399,9 +448,6 @@ fun KLineChart(
         val volTop = mainBottom + (if (showVolume) paneGap else 0f)
         val volBottom = volTop + (volH - if (showVolume) paneGap else 0f)
 
-        // 候选宽度（首帧用默认）
-        val cw = if (state.candleWidthPx > 0f) state.candleWidthPx
-        else with(density) { dims.candleDefaultWidth.toPx() }.also { state.candleWidthPx = it }
         val maxOffset = max(0f, candles.size * cw - chartW)
         // 允许向左滑出空白：scrollOffset 可降到负值，把最新根拖离右边缘留白
         val minOffset = if (blankScrollRatio > 0f) -chartW * blankScrollRatio.coerceAtMost(0.9f) else 0f
@@ -428,24 +474,8 @@ fun KLineChart(
         // 读数聚焦索引：长按十字光标时取命中根，否则取最新一根
         val focusIdx = if (state.crosshairIndex in candles.indices) state.crosshairIndex else candles.lastIndex
 
-        // —— 主图价格区间（含主指标线，避免裁切）——
-        var pMin = Double.MAX_VALUE
-        var pMax = -Double.MAX_VALUE
-        for (i in firstIdx..lastIdx) {
-            pMin = min(pMin, candles[i].low)
-            pMax = max(pMax, candles[i].high)
-        }
-        mainSeries.forEach { s ->
-            s.lines.forEach { line ->
-                for (i in firstIdx..lastIdx) line.values.getOrNull(i)?.let {
-                    pMin = min(pMin, it); pMax = max(pMax, it)
-                }
-            }
-        }
-        if (pMin == Double.MAX_VALUE) { pMin = 0.0; pMax = 1.0 }
-        if (pMax - pMin < 1e-9) { pMax = pMin + 1.0 }
-        val pad = (pMax - pMin) * 0.06
-        pMin -= pad; pMax += pad
+        // —— 主图价格区间（含主指标线，避免裁切；与自适应右轴同一算法）——
+        val (pMin, pMax) = priceRange(firstIdx, lastIdx)
         fun yOf(p: Double, top: Float, bottom: Float, lo: Double, hi: Double): Float =
             top + ((hi - p) / (hi - lo) * (bottom - top)).toFloat()
         fun mainY(p: Double) = yOf(p, mainTop, mainBottom, pMin, pMax)
@@ -454,7 +484,6 @@ fun KLineChart(
 
         // —— 右轴标签：以 y 为竖直中心绘制，上下对称留白（修正旧版底部无 padding）——
         val labelHalfH = axisText.lineHeight / 2f + axisTextPx * 0.3f
-        val labelPad = 4f
         fun drawRightLabel(yCenter: Float, text: String, bg: Color, fg: Color) {
             val tw = axisText.measure(text)
             val cy = yCenter.coerceIn(labelHalfH, chartH - labelHalfH)

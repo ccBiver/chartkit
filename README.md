@@ -41,7 +41,7 @@ dependencyResolutionManagement {
 }
 
 // 模块 build.gradle.kts
-implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.7")
+implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.8")
 ```
 
 要求 `minSdk 24`，已开启 Compose。坐标 / 版本 / 发布细节见 [PUBLISHING.md](PUBLISHING.md)。
@@ -56,7 +56,7 @@ implementation("com.github.ccBiver.chartkit:chartkit-compose:0.1.7")
 
 ```kotlin
 // commonMain
-implementation("io.github.ccbiver:chartkit-kmp:0.1.7")
+implementation("io.github.ccbiver:chartkit-kmp:0.1.8")
 ```
 
 目标平台：`androidTarget`、`iosX64/iosArm64/iosSimulatorArm64`、`jvm`(Desktop)。API 与 Android 版一致，`@Composable fun KLineChart(...)` 直接在 `commonMain` 调用。差异：全屏（`launchChartFullscreen`，依赖 Android `Activity`）仅 Android 版提供，KMP 端用 `onToggleFullscreen` 回调由宿主自行实现。
@@ -126,7 +126,8 @@ data class Candle(
 | `mainIndicators` | `List<Indicator>` | `[]` | 主图叠加，如 `listOf(Ma(), Boll(20, 2.0))`。 |
 | `subIndicators` | `List<Indicator>` | `[]` | 每个独立成一个副图（可叠加），如 `listOf(Macd(), Kdj())`。 |
 | `formatter` | `ChartFormatter` | `Default` | 价格/量/时间格式化（精度、千分位、locale）。 |
-| `entranceAnimation` | `Boolean` | `true` | 首屏/切周期的从左往右揭示动画；`false` 关闭。 |
+| `entranceAnimation` | `Boolean` | `true` | **首屏**从左往右揭示动画；`false` 关闭。 |
+| `resetAnimation` | `Boolean` | `= entranceAnimation` | **后续全量更新(RESET，如切周期)**时的退出→进入动画。设 `false` 则切周期直接切换、不重播动画（首屏仍受 `entranceAnimation` 控制）。 |
 | `showVolume` | `Boolean` | `true` | 是否显示成交量窗格。 |
 | `tradeMarks` | `List<TradeMark>` | `[]` | K 线上的买卖标记（可点击）。 |
 | `logo` | `Painter?` | `null` | 水印图片，`painterResource(R.drawable.x)`。 |
