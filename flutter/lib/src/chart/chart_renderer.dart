@@ -77,6 +77,9 @@ class ChartRenderer {
   Size get size => layout.size;
   ChartDims get dims => theme.dims;
   double get labelPad => 4 * unit;
+  /// 现价标签四周内边距（逻辑像素），同旧版 App K 线。
+  static const double lastPriceLabelPad = 4;
+
   double get labelHalfHeight => text.lineHeight / 2 + text.scaledFontSize * 0.3;
   double get bodyWidth => layout.candleWidth * (1 - dims.candleGapRatio);
 
@@ -119,19 +122,27 @@ class ChartRenderer {
 
   /// 右轴标签：以 [yCenter] 为竖直中心，贴右边缘、宽度随文本自适应。
   /// [second] 非空时在下方多一行（右对齐），标签相应增高。返回标签占用的矩形。
-  Rect rightLabel(double yCenter, String s, Color bg, Color fg, {String? second}) {
+  ///
+  /// [pad] 非空时按逻辑像素给四周内边距（两行之间隔 2、圆角 4），用于现价标签；
+  /// 为空时沿用按物理像素的紧凑尺寸（十字光标价签等）。
+  Rect rightLabel(double yCenter, String s, Color bg, Color fg, {String? second, double? pad}) {
     final line = text.lineHeight;
-    final half = second == null ? labelHalfHeight : line + text.scaledFontSize * 0.3;
+    const rowGap = 2.0;
+    final padH = pad ?? labelPad;
+    final half = pad != null
+        ? (second == null ? line / 2 : line + rowGap / 2) + pad
+        : (second == null ? labelHalfHeight : line + text.scaledFontSize * 0.3);
     final cy = _clamp(yCenter, half, layout.chartHeight - half);
     final width = math.max(text.measure(s), second == null ? 0.0 : text.measure(second));
-    final box = Rect.fromLTRB(size.width - labelPad * 2 - width, cy - half, size.width, cy + half);
-    roundRect(bg, box, 5 * unit);
-    final right = size.width - labelPad;
+    final box = Rect.fromLTRB(size.width - padH * 2 - width, cy - half, size.width, cy + half);
+    roundRect(bg, box, pad != null ? 4 : 5 * unit);
+    final right = size.width - padH;
+    final rowOffset = pad != null ? (line + rowGap) / 2 : line / 2;
     if (second == null) {
       text.drawVCenterLeft(canvas, s, right - text.measure(s), cy, fg);
     } else {
-      text.drawVCenterLeft(canvas, s, right - text.measure(s), cy - line / 2, fg);
-      text.drawVCenterLeft(canvas, second, right - text.measure(second), cy + line / 2, fg);
+      text.drawVCenterLeft(canvas, s, right - text.measure(s), cy - rowOffset, fg);
+      text.drawVCenterLeft(canvas, second, right - text.measure(second), cy + rowOffset, fg);
     }
     return box;
   }
@@ -321,20 +332,22 @@ class ChartRenderer {
     // 最新价在可见价格区间外：标签贴主图上/下沿（不画线）
     final half = labelHalfHeight;
     final labelY = drawLine ? y : (y < l.mainTop ? l.mainTop + half : l.mainBottom - half);
-    final box =
-        rightLabel(labelY, formatter.price(c.close), color, theme.lastPriceText, second: countdown);
+    final box = rightLabel(labelY, formatter.price(c.close), color, theme.lastPriceText,
+        second: countdown, pad: lastPriceLabelPad);
     if (orderbook != null) _drawOrderbook(orderbook, box);
   }
 
-  /// 买一/卖一贴纸：实色胶囊，贴在现价标签 [label] 左侧，在标签中线处上下相接（卖上、买下）。
+  /// 买一/卖一贴纸：实色圆角块，贴在现价标签 [label] 左侧，在标签中线处上下相接（卖上、买下）。
+  /// 内边距横 6、竖 3，圆角 4，离标签 4（逻辑像素，不随 [unit] 缩）。
   void _drawOrderbook(ChartOrderbook ob, Rect label) {
-    final height = text.lineHeight + 2;
+    const padH = 6.0;
+    final height = text.lineHeight + 6;
     final right = label.left - 4;
     final cy = _clamp(label.center.dy, height, layout.chartHeight - height);
     void pill(String s, Color color, double top) {
-      final width = text.measure(s) + 12;
-      roundRect(color, Rect.fromLTWH(right - width, top, width, height), height / 2);
-      text.drawVCenterLeft(canvas, s, right - width + 6, top + height / 2, theme.lastPriceText);
+      final width = text.measure(s) + padH * 2;
+      roundRect(color, Rect.fromLTWH(right - width, top, width, height), 4);
+      text.drawVCenterLeft(canvas, s, right - width + padH, top + height / 2, theme.lastPriceText);
     }
 
     if (ob.ask > 0) {
