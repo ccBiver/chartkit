@@ -21,7 +21,8 @@ https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 chartkit/
 ├── core/      # pure Kotlin/JVM: Candle, TimeFrame, Indicator + builtins (unit-tested)
 ├── compose/   # Android library: KLineChart composable, state, theme
-└── kmp/       # Compose Multiplatform library (Android/iOS/Desktop), reuses core + compose sources → chartkit-kmp
+├── kmp/       # Compose Multiplatform library (Android/iOS/Desktop), reuses core + compose sources → chartkit-kmp
+└── flutter/   # Flutter port (rendering and indicators rewritten in pure Dart) → chartkit_flutter, see flutter/README.md
 ```
 
 ---

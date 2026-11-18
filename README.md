@@ -21,7 +21,8 @@ https://github.com/user-attachments/assets/7bc1ff7e-96d2-4090-954a-25da83fd9d92
 chartkit/
 ├── core/      # 纯 Kotlin/JVM：Candle、TimeFrame、Indicator + 内置指标（有单测）
 ├── compose/   # Android 库：KLineChart 组合项、状态、主题
-└── kmp/       # Compose Multiplatform 库（Android/iOS/Desktop），复用 core + compose 源码 → chartkit-kmp
+├── kmp/       # Compose Multiplatform 库（Android/iOS/Desktop），复用 core + compose 源码 → chartkit-kmp
+└── flutter/   # Flutter 版（纯 Dart 重写渲染层与指标层）→ chartkit_flutter，见 flutter/README.md
 ```
 
 ---
