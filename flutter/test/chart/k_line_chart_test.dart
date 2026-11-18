@@ -486,6 +486,83 @@ void main() {
     expect(state.scrollOffset, 0);
   });
 
+  testWidgets('initialBlankScroll opens with the blank area and restores it on reset',
+      (tester) async {
+    state.setData(_data(500));
+    await _pump(
+      tester,
+      KLineChart(
+        state: state,
+        entranceAnimation: false,
+        enableFling: false,
+        blankScrollWidth: 160,
+        initialBlankScroll: true,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(state.scrollOffset, -160, reason: 'data set before mounting is applied after the frame');
+    final mapper = state.mapper.value!;
+    final lastX = mapper.indexToX(mapper.itemCount - 1);
+    expect(lastX + mapper.candleWidth / 2, closeTo(mapper.mainRect.right - 160, 0.5));
+
+    await tester.drag(find.byType(KLineChart), const Offset(300, 0));
+    await tester.pump();
+    expect(state.scrollOffset, greaterThan(0));
+
+    state.setData(_data(300, startTime: 1 << 30));
+    await tester.pump();
+    expect(state.scrollOffset, -160, reason: 'a reset returns to the blank edge, not flush right');
+  });
+
+  testWidgets('initialBlankScroll follows blankScrollRatio and stays inside the 90% cap',
+      (tester) async {
+    await _pump(
+      tester,
+      KLineChart(
+        state: state,
+        entranceAnimation: false,
+        blankScrollRatio: 0.25,
+        initialBlankScroll: true,
+      ),
+    );
+    await tester.pump();
+    state.setData(_data(500));
+    await tester.pump();
+    await tester.pump();
+    final width = state.mapper.value!.mainRect.width;
+    expect(state.scrollOffset, closeTo(-width * 0.25, 0.5));
+
+    await _pump(
+      tester,
+      KLineChart(
+        state: state,
+        entranceAnimation: false,
+        blankScrollWidth: 5000,
+        initialBlankScroll: true,
+      ),
+    );
+    state.setData(_data(200));
+    await tester.pump();
+    await tester.pump();
+    expect(state.scrollOffset, closeTo(-state.mapper.value!.mainRect.width * 0.9, 0.5));
+  });
+
+  testWidgets('initialBlankScroll is ignored when off or without a blank area', (tester) async {
+    state.setData(_data(500));
+    await _pump(tester, KLineChart(state: state, entranceAnimation: false, blankScrollWidth: 160));
+    await tester.pump();
+    await tester.pump();
+    expect(state.scrollOffset, 0);
+
+    await _pump(
+        tester, KLineChart(state: state, entranceAnimation: false, initialBlankScroll: true));
+    state.setData(_data(400));
+    await tester.pump();
+    await tester.pump();
+    expect(state.scrollOffset, 0);
+  });
+
   testWidgets('vertical drags are left to the parent scrollable', (tester) async {
     state.setData(_data(200));
     final controller = ScrollController();

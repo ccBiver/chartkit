@@ -114,6 +114,7 @@ ValueListenableBuilder(
 | `lockCrosshairPrice` | 自由模式下把水平线锁在价位上，价格区间变化时线跟着价位走。适合用十字光标选下单价 |
 | `crosshairPanelMargin` | 详情浮窗的额外外边距，用来避开叠在图上的组件 |
 | `blankScrollWidth` | 右侧可拖出的留白，按绝对宽度指定（优先于 `blankScrollRatio`） |
+| `initialBlankScroll` | 首屏和每次 `setData` 后让最新一根停在留白区左缘（右侧先空出留白），默认 `false` 贴右 |
 | `showHighLow` | 标注可见区的最高价与最低价 |
 
 主题里与此相关的颜色：`crosshairVertical` / `crosshairVerticalWidth`（竖线单独配色，给宽度则画成半透明竖带）、

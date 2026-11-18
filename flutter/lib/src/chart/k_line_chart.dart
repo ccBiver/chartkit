@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -50,6 +51,7 @@ class KLineChart extends StatefulWidget {
     this.showSkeleton = true,
     this.blankScrollRatio = 0,
     this.blankScrollWidth = 0,
+    this.initialBlankScroll = false,
     this.showHighLow = false,
     this.lockCrosshairPrice = false,
     this.crosshairPanelMargin = EdgeInsets.zero,
@@ -111,6 +113,11 @@ class KLineChart extends StatefulWidget {
 
   /// 同上，但用绝对宽度（逻辑像素）指定；大于 0 时优先于 [blankScrollRatio]。
   final double blankScrollWidth;
+
+  /// 首屏和每次全量更新（`setData`）后，是否让最新一根停在留白区左缘：
+  /// 即一打开右侧就先空出 [blankScrollWidth]（或 [blankScrollRatio]）那么宽，而不是贴右。
+  /// 适合右侧要放现价、下单标签等宿主组件的场景。未开启留白时无效。
+  final bool initialBlankScroll;
 
   /// 在主图上标注可见区的最高价与最低价（仅蜡烛模式）。
   final bool showHighLow;
@@ -224,6 +231,9 @@ class _KLineChartView extends State<KLineChart>
   Timer? _countdownTimer;
   bool _afterFrameScheduled = false;
 
+  /// 全量更新后待应用初始留白（需要布局宽度，或当前处于构建阶段不能通知）。
+  bool _pendingInitialBlank = false;
+
   KLineChartState get _state => widget.state;
 
   // ───────────────────────── ChartFrameSource ─────────────────────────
@@ -244,6 +254,10 @@ class _KLineChartView extends State<KLineChart>
   @override
   void onFrameLayout(ChartLayout? layout) {
     _layout = layout;
+    _scheduleAfterFrame();
+  }
+
+  void _scheduleAfterFrame() {
     if (_afterFrameScheduled) return;
     _afterFrameScheduled = true;
     // 绘制期间不能触发通知/回调，推迟到帧末
@@ -259,6 +273,10 @@ class _KLineChartView extends State<KLineChart>
     final valid = layout != null && candles.isNotEmpty;
     _state.updateMapper(valid ? KLineChartMapper(layout, candles) : null);
     if (!valid) return;
+    if (_pendingInitialBlank) {
+      _pendingInitialBlank = false;
+      _state.setViewport(scrollOffset: layout.minOffset);
+    }
     // 分页：接近最早数据时触发，同一数据版本只触发一次
     final nearStart =
         layout.firstIndex <= 3 && layout.offset >= layout.maxOffset - layout.candleWidth * 3;
@@ -363,12 +381,36 @@ class _KLineChartView extends State<KLineChart>
     if (_resetVersion != _state.resetVersion) {
       _resetVersion = _state.resetVersion;
       _gestures.stopFling();
+      _applyInitialBlank();
       _playEntrance();
     }
     _syncSkeleton();
     _reportCrosshair();
     _reportCrosshairPrice();
     _repaint.tick();
+  }
+
+  /// 全量更新后把视口移到留白区左缘（见 [KLineChart.initialBlankScroll]）。
+  /// 构建阶段（initState / didUpdateWidget）不能通知监听者，且留白按比例给时要知道蜡烛区宽度：
+  /// 这两种情况推迟到帧末，用本帧布局算出的 `minOffset`。
+  void _applyInitialBlank() {
+    _pendingInitialBlank = false;
+    final w = widget;
+    if (!w.initialBlankScroll || _state.candles.isEmpty) return;
+    if (w.blankScrollWidth <= 0 && w.blankScrollRatio <= 0) return;
+    final layout = _layout;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final building = phase != SchedulerPhase.idle && phase != SchedulerPhase.postFrameCallbacks;
+    if (layout == null || building) {
+      _pendingInitialBlank = true;
+      _scheduleAfterFrame();
+      return;
+    }
+    final maxBlank = layout.chartWidth * 0.9;
+    final blank = w.blankScrollWidth > 0
+        ? math.min(w.blankScrollWidth, maxBlank)
+        : layout.chartWidth * math.min(w.blankScrollRatio, 0.9);
+    _state.setViewport(scrollOffset: -blank);
   }
 
   /// 倒计时每秒变一次，而行情不一定每秒都有 tick：开启时用定时器驱动重绘。
