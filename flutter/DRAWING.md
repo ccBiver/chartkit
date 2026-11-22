@@ -177,7 +177,16 @@ drawings.loadJson(saved == null ? null : jsonDecode(saved));
 
 示例 App（`example/lib/main.dart`）的第一行工具栏演示 12 个工具、显示开关、清除、恢复，选中后可以锁定、删除、换色、改线宽、改斐波那契档位。
 
-测试在 `test/drawing/`：
+全部测试一条命令：在 `flutter/` 下跑 `flutter test`（含参考图比对）。按编号列出各项测试：
+
+| 编号 | 测试 | 做法 |
+|---|---|---|
+| F1-01 画线几何 | `test/drawing/drawing_geometry_cases_test.dart` | 12 个工具各 3 组锚点，期望坐标在 `testdata/drawing/geometry_cases.json`，由 `testdata/drawing/gen_geometry_cases.py` 照定义独立算出（不看 Dart 代码），误差不超过 0.5 像素。改了期望要重跑 `python3 gen_geometry_cases.py > geometry_cases.json` |
+| F1-02 画线手势 | `test/drawing/drawing_flows_test.dart` 的 F1-02 组、`drawing_chart_test.dart` | 每个工具走一遍新建（含吸附）、点空白取消、点线身选中、整体移动、拖端点、锁定后拖不动、删除，之后长按仍出十字光标；选中时在别处双指缩放和横拖照常 |
+| F1-03 画线保存 | `test/drawing/drawing_flows_test.dart` 的 F1-03 组 | 画 10 条（含改样式、锁定、改斐波那契档位），序列化再读回：数据相等，画面逐像素相等；切到 5 分钟图位置按时间落位，切回 1 分钟图画面和保存前逐像素相等 |
+| F1-05 默认关闭 | `test/baseline/default_off_golden_test.dart`、`empty_controller_golden_test.dart` | 参考图在 `testdata/baseline/`，是在干净的 `feat/flutter-port`（9d3ee15）上用同一份测试 `flutter test --update-goldens test/baseline/default_off_golden_test.dart` 生成的，7 个场景（深色默认、浅色加指标和买卖标记、分时、十字光标、留白加盘口贴纸加宿主图层、横屏吸附光标、骨架屏）。本分支不传新参数逐像素一致；传了空的画线控制器也逐像素一致。不要在本分支上 `--update-goldens` 覆盖这些图 |
+
+其余测试：
 
 - `drawing_geometry_test.dart`：时间换算（含跳空、外推、跨周期）、坐标换算、吸附、各工具几何、头寸和测量的数值、拖端点和平移、命中判断。
 - `drawing_model_test.dart`：12 个工具的 JSON 往返、坏数据跳过、控制器的新建、删除、清除、锁定、改样式、显示开关、保存回调。
