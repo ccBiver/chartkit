@@ -14,3 +14,8 @@ export 'src/chart/k_line_chart_state.dart';
 export 'src/chart/sub_indicator_controller.dart';
 export 'src/chart/chart_painter.dart' show ChartOverlayPainter;
 export 'src/chart/k_line_chart.dart';
+export 'src/drawing/drawing.dart';
+export 'src/drawing/drawing_controller.dart';
+export 'src/drawing/drawing_geometry.dart'
+    show DrawingTimeline, PositionStats, RangeStats, positionStats, gannFanRatios;
+export 'src/drawing/drawing_theme.dart';

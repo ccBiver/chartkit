@@ -68,6 +68,12 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
   };
 
   final _state = KLineChartState();
+  // 画线：颜色由调用方给；onChanged 里按品种存 toJson()，这里只存在内存里演示
+  late final DrawingController _drawings = DrawingController(
+    style: const DrawingStyle(color: Color(0xFF3B82F6)),
+    onChanged: () => _savedDrawings = _drawings.toJson(),
+  );
+  Map<String, Object?>? _savedDrawings;
   final _subs = SubIndicatorController(mode: SubIndicatorMode.multiple);
   final _random = math.Random();
   Timer? _ticker;
@@ -81,6 +87,7 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
   void initState() {
     super.initState();
     _subs.addListener(() => setState(() {}));
+    _drawings.addListener(() => setState(() {}));
     _subs.toggle(_subOptions['MACD']!);
     _load();
     _ticker = Timer.periodic(const Duration(milliseconds: 800), (_) => _tick());
@@ -91,6 +98,7 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
     _ticker?.cancel();
     _loader?.cancel();
     _subs.dispose();
+    _drawings.dispose();
     _state.dispose();
     super.dispose();
   }
@@ -209,12 +217,21 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
                 logo: const FlutterLogo(style: FlutterLogoStyle.horizontal),
                 onLoadMore: _loadMore,
                 onToggleFullscreen: () {},
+                drawingController: _drawings,
+                drawingLabels: const DrawingLabels(
+                  entry: '入场',
+                  target: '目标',
+                  stop: '止损',
+                  riskReward: '盈亏比',
+                  bars: '根',
+                ),
                 onTradeMarkTap:
                     (m) => ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('${m.isBuy ? 'Buy' : 'Sell'} @ ${m.price}')),
                     ),
               ),
             ),
+            _drawingRow(text),
             _chipRow(text, [
               for (final e in _mainOptions.entries)
                 _chip(e.key, _main.contains(e.value), text, () => _toggleMain(e.value)),
@@ -226,6 +243,67 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
         ),
       ),
     );
+  }
+
+  static const _toolNames = {
+    DrawingTool.trendLine: '趋势线',
+    DrawingTool.ray: '射线',
+    DrawingTool.horizontalLine: '水平线',
+    DrawingTool.verticalLine: '垂直线',
+    DrawingTool.rectangle: '矩形',
+    DrawingTool.fibRetracement: '斐波那契',
+    DrawingTool.priceRange: '测量',
+    DrawingTool.longPosition: '多头头寸',
+    DrawingTool.shortPosition: '空头头寸',
+    DrawingTool.pitchfork: '安德鲁分叉',
+    DrawingTool.elliottWave: '艾略特波浪',
+    DrawingTool.gannFan: '江恩扇形',
+  };
+
+  /// 画线工具栏：工具、显示开关、清除；选中时多出锁定、删除。
+  Widget _drawingRow(Color text) {
+    final d = _drawings;
+    final selected = d.selected;
+    final tool = d.tool;
+    return _chipRow(text, [
+      if (tool != null) ...[
+        _chip(
+          '${_toolNames[tool]}：点第 ${d.draft.length + 1}/${tool.pointCount} 个点',
+          true,
+          text,
+          () {},
+        ),
+        _chip('取消', false, text, () => d.tool = null),
+      ] else if (selected != null) ...[
+        _chip(
+          selected.locked ? '解锁' : '锁定',
+          false,
+          text,
+          () => d.setLocked(selected.id, !selected.locked),
+        ),
+        _chip('删除', false, text, d.removeSelected),
+        _chip('换色', false, text, () {
+          const colors = [Color(0xFF3B82F6), Color(0xFFF0A020), Color(0xFFB44BE0)];
+          final next = colors[(colors.indexOf(selected.style.color) + 1) % colors.length];
+          d.setStyle(selected.id, selected.style.copyWith(color: next));
+        }),
+        _chip('线宽 ${selected.style.width.toInt()}', false, text, () {
+          d.setStyle(selected.id, selected.style.copyWith(width: selected.style.width % 3 + 1));
+        }),
+        if (selected.tool == DrawingTool.fibRetracement)
+          _chip(
+            '只看 0.382/0.5/0.618',
+            false,
+            text,
+            () => d.setFibLevels(selected.id, const [0.382, 0.5, 0.618]),
+          ),
+      ] else
+        for (final e in _toolNames.entries) _chip(e.value, false, text, () => d.tool = e.key),
+      const SizedBox(width: 12),
+      _chip('显示画线', d.visible, text, () => d.visible = !d.visible),
+      _chip('清除全部', false, text, d.clear),
+      _chip('恢复', false, text, () => d.loadJson(_savedDrawings)),
+    ]);
   }
 
   Widget _chipRow(Color color, List<Widget> children) => SingleChildScrollView(
