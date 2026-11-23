@@ -101,6 +101,16 @@ void main() {
         theme: ChartTheme.light, candleWidth: 6);
     await shot(tester, '12_横屏_主图加副图', ['com-supertrend-strategy', 'sar', 'macd'],
         size: const Size(900, 420), candleWidth: 7);
+    await shot(tester, '15_副图画到主图_趋势衰竭', ['com-trend-exhaustion-continuation-map-bullby'],
+        candleWidth: 6);
+    await shot(tester, '16_副图画到主图_已实现方差自绘K线', ['com-signed-realized-variance-trend-backquant'],
+        candleWidth: 7);
+    await shot(tester, '17_副图画到主图_大周期面板线段', ['com-macd-with-htf-panels-theultimator5'],
+        candleWidth: 4, blank: 300);
+    await shot(tester, '18_副图画到主图_卡尔曼滤波', ['com-innovation-adaptive-kalman-filter-oscill'],
+        candleWidth: 6);
+    await shot(tester, '19_ML超级趋势_滚到最早一屏', ['com-machine-learning-adaptive-supertrend-alg'],
+        candleWidth: 5, scroll: 100000);
     final candles = loadKlines();
     await shot(tester, '13_合成_全部标签样式和标记形状', [labelMarkerStyles(candles)], candleWidth: 13);
     await shot(

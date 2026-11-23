@@ -77,13 +77,14 @@ Object? describe(ScriptOutput o) => {
             b.t1, b.top, b.t2, b.bottom, b.extend.name, b.bg, b.borderColor, b.borderWidth, //
             b.borderStyle.name, b.text?.text, b.text?.color, b.text?.size.name, b.text?.halign.name,
             b.text?.valign.name,
+            b.text?.points,
           ],
       ],
       'labels': [
         for (final l in o.labels)
           [
             l.time, l.price.isNaN ? null : l.price, l.yloc.name, l.text, l.style.name, l.color, //
-            l.textColor, l.size.name, l.align.name, l.tooltip,
+            l.textColor, l.size.name, l.points, l.align.name, l.tooltip,
           ],
       ],
       'tables': [
@@ -93,7 +94,7 @@ Object? describe(ScriptOutput o) => {
             t.borderWidth,
             [
               for (final c in t.cells)
-                [c.column, c.row, c.text, c.textColor, c.bg, c.size.name, c.halign.name]
+                [c.column, c.row, c.text, c.textColor, c.bg, c.size.name, c.points, c.halign.name]
             ],
           ],
       ],
@@ -356,6 +357,60 @@ void main() {
       expect(s.values[2].isNaN, isTrue);
       expect(r.output!.palette[2], isNull);
       expect(r.warnings, hasLength(3));
+    });
+
+    test('numeric sizes (Pine v6 points, as number or string) are kept as points', () {
+      final j = minimal()
+        ..['labels'] = [
+          {
+            't': 0,
+            'p': 1,
+            'yloc': 'price',
+            'text': 'a',
+            'style': 'circle',
+            'color': 1,
+            'textColor': 2,
+            'size': '6',
+            'align': 'center'
+          },
+          {
+            't': 0,
+            'p': 1,
+            'yloc': 'price',
+            'text': 'b',
+            'style': 'none',
+            'color': 1,
+            'textColor': 2,
+            'size': 12.0,
+            'align': 'center'
+          },
+          {
+            't': 0,
+            'p': 1,
+            'yloc': 'price',
+            'text': 'c',
+            'style': 'none',
+            'color': 1,
+            'textColor': 2,
+            'size': 'small',
+            'align': 'center'
+          },
+        ]
+        ..['tables'] = [
+          {
+            'position': 'top_right', 'columns': 1, 'rows': 1, 'bg': 0, //
+            'cells': [
+              [0, 0, 'x', 1, 0, '12', 'left'],
+            ],
+          },
+        ];
+      final r = parseScriptOutput(j);
+      expect(r.warnings, isEmpty);
+      expect(r.output!.labels.map((l) => l.points), [6, 12, null]);
+      expect(r.output!.labels[2].size, ScriptSize.small);
+      expect(r.output!.tables.single.cells.single.points, 12);
+      final real = loadSample('com-innovation-adaptive-kalman-filter-oscill');
+      expect(real.labels.map((l) => l.points).toSet(), containsAll(<double?>[4, 6]));
     });
 
     test('a fill that refers to an unknown id is skipped', () {

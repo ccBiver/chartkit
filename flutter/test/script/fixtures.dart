@@ -24,6 +24,15 @@ const sampleScripts = [
   'com-trend-exhaustion-continuation-map-bullby',
   'com-signed-realized-variance-trend-backquant',
   'st-macd',
+  // 服务端脚本引擎修复 display 和 force_overlay 后新增的样本
+  'opt-liq-mss',
+  'com-adaptive-breakout-oscillator-schizoquant',
+  'com-almazov-trade-mtf-structure-bos-entries',
+  'com-innovation-adaptive-kalman-filter-oscill',
+  'com-liquidity-sweep-map-gbb',
+  'com-macd-with-htf-panels-theultimator5',
+  'com-redk-indicator-amplifier-redk-i-amp',
+  'com-redk-multi-modal-trailingstop-redk-mmtst',
 ];
 
 /// 测试环境的 15m K 线（含每天和周末的休市空档）。

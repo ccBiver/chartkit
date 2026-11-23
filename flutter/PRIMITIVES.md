@@ -107,7 +107,7 @@ SCHEMA 没规定，参照 TradingView：
 | 标签 | 9 种气泡（上、下、左、右、居中、四个角）、`none`（只有文字）、10 种形状；`size`、`align`（多行文字的对齐） | `tooltip` 不显示（图表没有悬停） |
 | 表格 | 9 个位置、`bg`、`frame`、`border`、每格的字色 / 底色 / 字号 / 水平对齐 | 列宽、行高按内容算；格子里的 `\n` 换行 |
 
-字号按图表坐标轴字号（默认 10）缩放：tiny 0.8、small 1.0、normal 1.2、large 1.5、huge 2.0、auto 1.0。形状半径：tiny 3、small 4.5、normal 6、large 8、huge 11，auto 随 K 线宽度在 2.5～6 之间。图元里的文字原样画，不翻译。
+字号按图表坐标轴字号（默认 10）缩放：tiny 0.8、small 1.0、normal 1.2、large 1.5、huge 2.0、auto 1.0。形状半径：tiny 3、small 4.5、normal 6、large 8、huge 11，auto 随 K 线宽度在 2.5～6 之间。标签、方框文字、表格格子的字号也可以是数字（Pine v6 的 `size = 12`，引擎可能写成字符串 `"12"`）：直接当作字号（逻辑像素）；标签的形状样式用它的一半当半径。SCHEMA 还没写这种情况。图元里的文字原样画，不翻译。
 
 ## 解析
 
@@ -141,18 +141,19 @@ SCHEMA 没规定，参照 TradingView：
 - 增量更新（`tail`）：引擎目前只发整份，没做。
 - `tooltip`：图表没有悬停，不显示。
 - `inputs`：解析成 `ScriptInput` 给 App 的参数面板用，图表不用。
-- `force_overlay` 的对象：引擎目前不给单个图元标 `pane: "main"`，这类对象还留在副图，会把副图纵轴撑到价格的量级（样本 `com-trend-exhaustion-...`、`com-signed-realized-variance-...` 就是这样）。图表已经支持 `pane: "main"`，引擎给了就会画到主图。
-- `display.data_window` 的曲线：引擎目前输出成 `visible: true`，图表照画。引擎改成 `visible: false` 后就不画了，图表这边不用改。
+- 画到主图的对象（线段、方框、标签、标记）不进主图价格区间，超出可见 K 线价格范围的部分会被裁掉。例如 `com-macd-with-htf-panels-...` 画在最后一根右边的大周期面板，价格在 3424～3709，比可见 K 线的范围宽，面板上下会被截断；`com-trend-exhaustion-...` 的大方框也会超出上沿。
+- 数字字号：SCHEMA 只列了 tiny～auto，真样本里有 `"12"`、`"4"`、`"6"`，图表按字号处理（见上）。
 - 图例、十字光标数值的界面不做，只提供 `valuesAt`。
 
 ## 测试
 
 | 文件 | 内容 |
 |---|---|
-| `test/script/parse_test.dart` | 16 份真输出逐类核对；protojson 版（double、科学计数法、键乱序）解析结果和原版逐字段相同；不认识的字段和枚举、`v` 不对、缺字段、坏颜色、长度不对 |
+| `test/script/parse_test.dart` | 24 份真输出逐类核对；数字字号；protojson 版（double、科学计数法、键乱序）解析结果和原版逐字段相同；不认识的字段和枚举、`v` 不对、缺字段、坏颜色、长度不对 |
 | `test/script/align_test.dart` | 期望下标用线性扫描独立算，期望像素用公式独立算：真样本全部对象的下标；休市空档、越过最后一根、早于第一根；本地缺 `bars.to`、根数对不上、周期对不上、本地比输出短、实时新 K 线；从渲染出的图片里找线和点的像素位置（误差 0.5 像素以内） |
 | `test/script/render_golden_test.dart` | 21 张参考图：每类图元一张、全部样式两张、3 主图 + 2 副图深浅各一张、多个主图脚本叠加、和内置副图并存的横屏 |
 | `test/script/pane_test.dart` | 副图策略 `st-macd` 的成交点画在主图对应 K 线和价格上（像素核对）、副图里没有、副图纵轴只按自己的序列；手写合成样本里十类图元标 `pane: "main"` 时的解析、画的位置、主图价格区间、副图纵轴、取值接口的 `pane`；主图脚本里这个字段没有作用；2 张参考图 |
+| `test/script/real_pane_test.dart` | 用服务端脚本引擎修复 display 和 force_overlay 后的真样本：6 个副图脚本的副图纵轴（全部 1000 根）和引擎输出里各窗格的数值范围一致；画到主图的曲线和自绘 K 线不超出 K 线范围；趋势衰竭的方框、标记、表格，已实现方差的自绘 K 线，大周期面板的线段，卡尔曼滤波的曲线、圆点标签、背景色和表格都画在主图，位置用「同一份输出渲染两次、只把目标图元改成不画、取差异」的办法和独立公式核对 |
 | `test/script/update_test.dart` | 替换副图脚本只重录它的窗格；替换主图脚本只重录受影响的；十字光标不重录；替换后下一帧就是新内容；移除副图收起窗格；末根原地更新不重新对齐 |
 | `test/script/benchmark_test.dart` | 解析耗时、500 个标签首次排版、一帧的绘制耗时 |
 | `test/baseline/script_off_golden_test.dart` | 空控制器、设置了输出但隐藏：7 个场景都和基线 9d3ee15 的参考图逐像素一致 |

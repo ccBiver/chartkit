@@ -20,6 +20,14 @@
 | macd | 副图 | 柱（逐根变色）、曲线、水平线 |
 | rsi | 副图 | 水平线之间的填充 |
 | wt | 副图 | 面积、点、阶梯线、线段、标签 |
-| com-trend-exhaustion-continuation-map-bullby | 副图 | 背景色、227 个方框、标记、表格、面积、柱 |
-| com-signed-realized-variance-trend-backquant | 副图 | 自绘 K 线 |
-| st-macd | 副图 | 157 个成交点 |
+| com-trend-exhaustion-continuation-map-bullby | 副图 | 背景色、面积、柱；227 个方框、8 组标记、1 个表格带 `pane: "main"` |
+| com-signed-realized-variance-trend-backquant | 副图 | 自绘 K 线带 `pane: "main"` |
+| st-macd | 副图 | 157 个成交点（画在主图） |
+| opt-liq-mss | 主图 | 3 组背景色、线段、方框、标签、表格；可见曲线 3→0 |
+| com-adaptive-breakout-oscillator-schizoquant | 副图 | 2 组标记、1 组自绘 K 线带 `pane: "main"` |
+| com-almazov-trade-mtf-structure-bos-entries | 主图 | 线段、方框、标签、表格；可见曲线 6→0 |
+| com-innovation-adaptive-kalman-filter-oscill | 副图 | 2 条曲线、116 个标签、1 组背景色、1 个表格带 `pane: "main"` |
+| com-liquidity-sweep-map-gbb | 主图 | 线段、26 个方框、标签、表格；可见曲线 9→0 |
+| com-macd-with-htf-panels-theultimator5 | 副图 | 295 条线段、4 个标签、1 个表格带 `pane: "main"` |
+| com-redk-indicator-amplifier-redk-i-amp | 副图 | 25 条曲线、表格 |
+| com-redk-multi-modal-trailingstop-redk-mmtst | 主图 | 曲线（1 条只当填充边界）、填充、标记、表格 |

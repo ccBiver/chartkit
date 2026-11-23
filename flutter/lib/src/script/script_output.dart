@@ -383,6 +383,7 @@ class ScriptBoxText {
     required this.text,
     required this.color,
     required this.size,
+    this.points,
     required this.halign,
     required this.valign,
   });
@@ -390,6 +391,9 @@ class ScriptBoxText {
   final String text;
   final int color;
   final ScriptSize size;
+
+  /// 脚本直接写的字号（Pine v6 允许 `size = 12`，单位是点）；有它时不看 [size]。
+  final double? points;
   final ScriptHAlign halign;
   final ScriptVAlign valign;
 }
@@ -438,6 +442,7 @@ class ScriptLabel {
     required this.color,
     required this.textColor,
     required this.size,
+    this.points,
     required this.align,
     required this.tooltip,
     this.mainPane = false,
@@ -458,6 +463,9 @@ class ScriptLabel {
   final int color;
   final int textColor;
   final ScriptSize size;
+
+  /// 脚本直接写的字号（Pine v6 允许 `size = 12`，单位是点）；有它时不看 [size]。
+  final double? points;
   final ScriptHAlign align;
   final String? tooltip;
 }
@@ -472,6 +480,7 @@ class ScriptTableCell {
     required this.textColor,
     required this.bg,
     required this.size,
+    this.points,
     required this.halign,
   });
 
@@ -481,6 +490,9 @@ class ScriptTableCell {
   final int textColor;
   final int bg;
   final ScriptSize size;
+
+  /// 脚本直接写的字号（Pine v6 允许 `size = 12`，单位是点）；有它时不看 [size]。
+  final double? points;
   final ScriptHAlign halign;
 }
 
@@ -903,6 +915,13 @@ class _Parser {
     );
   }
 
+  /// 字号：tiny…auto，或者数字（Pine v6 的点数，可能是字符串 "12"）。
+  (ScriptSize, double?) _size(Object? v, ScriptSize fallback, String where) {
+    final n = v is String ? double.tryParse(v) : (v is num ? v.toDouble() : null);
+    if (n != null && n.isFinite && n > 0) return (fallback, n);
+    return (_enum(_sizes, v, fallback, where), null);
+  }
+
   /// 单个图元上的 `pane`：`"main"` 表示副图脚本里这个图元画到主图；没有这个字段或 `"sub"` 时照常。
   bool _mainPane(Object? v, String where) {
     if (v == null || v == 'sub') return false;
@@ -1153,10 +1172,12 @@ class _Parser {
       _checkKeys(text, _boxTextKeys, 'boxes.text');
       final s = _str(text['text']);
       if (s.isNotEmpty) {
+        final textSize = _size(text['size'], ScriptSize.auto, '$where.text.size');
         boxText = ScriptBoxText(
           text: s,
           color: _color(text['color'], '$where.text'),
-          size: _enum(_sizes, text['size'], ScriptSize.auto, '$where.text.size'),
+          size: textSize.$1,
+          points: textSize.$2,
           halign: _enum(_hAligns, text['halign'], ScriptHAlign.center, '$where.text.halign'),
           valign: _enum(_vAligns, text['valign'], ScriptVAlign.center, '$where.text.valign'),
         );
@@ -1184,6 +1205,7 @@ class _Parser {
     _checkKeys(v, _labelKeys, 'labels');
     final t = _int(v['t']);
     if (t == null) return _skip(where, 'no time');
+    final size = _size(v['size'], ScriptSize.normal, '$where.size');
     return ScriptLabel(
       mainPane: _mainPane(v['pane'], where),
       time: t,
@@ -1193,7 +1215,8 @@ class _Parser {
       style: _enum(_labelStyles, v['style'], ScriptLabelStyle.labelDown, '$where.style'),
       color: _color(v['color'], where),
       textColor: _color(v['textColor'], where),
-      size: _enum(_sizes, v['size'], ScriptSize.normal, '$where.size'),
+      size: size.$1,
+      points: size.$2,
       align: _enum(_hAligns, v['align'], ScriptHAlign.center, '$where.align'),
       tooltip: _strOrNull(v['tooltip']),
     );
@@ -1215,15 +1238,17 @@ class _Parser {
         bad++;
         continue;
       }
+      final size = c.length > 5
+          ? _size(c[5], ScriptSize.normal, '$where.cell.size')
+          : (ScriptSize.normal, null);
       cells.add(ScriptTableCell(
         column: col,
         row: row,
         text: _str(c[2]),
         textColor: c.length > 3 ? _color(c[3], '$where.cell') : 0,
         bg: c.length > 4 ? _color(c[4], '$where.cell') : 0,
-        size: c.length > 5
-            ? _enum(_sizes, c[5], ScriptSize.normal, '$where.cell.size')
-            : ScriptSize.normal,
+        size: size.$1,
+        points: size.$2,
         halign: c.length > 6
             ? _enum(_hAligns, c[6], ScriptHAlign.center, '$where.cell.halign')
             : ScriptHAlign.center,
