@@ -72,8 +72,10 @@ for (final v in values) {
 
 ## 窗格和纵轴
 
-- `pane: main` 的全部图元画在主图，和 K 线共用价格轴。主图价格区间会把可见范围内主图脚本的曲线、面积、点和自绘 K 线算进去（和内置主图指标一样，免得被裁掉）；柱、水平线和各类对象不算进去。
-- `pane: sub` 的每个脚本单独一个副图，排在内置副图（`subIndicators`）之后，按设置顺序从上到下。纵轴按这个窗格里可见范围内的序列（柱、面积含基线）、水平线、自绘 K 线和对象（线段、方框、标签、成交点、`absolute` 标记）算，上下各留 5%。右轴标最大、最小值，小数位用输出的 `precision`，为空时用图表的 `ChartFormatter`。
+- `pane: main` 的全部图元画在主图，和 K 线共用价格轴。主图价格区间会把可见范围内画在主图上的曲线、面积、点和自绘 K 线算进去（和内置主图指标一样，免得被裁掉）；柱、水平线和各类对象不算进去。
+- `pane: sub` 的每个脚本单独一个副图，排在内置副图（`subIndicators`）之后，按设置顺序从上到下。纵轴按这个窗格里可见范围内的序列（柱、面积含基线）、水平线、自绘 K 线和对象（线段、方框、标签、`absolute` 标记）算，上下各留 5%。右轴标最大、最小值，小数位用输出的 `precision`，为空时用图表的 `ChartFormatter`。
+- 策略成交点（`trades`）一律画在主图的价格上，不管脚本的 `pane` 是 main 还是 sub，也不计入副图纵轴。
+- 单个图元上的 `pane: "main"`：副图脚本里这个图元画到主图，并按主图的规则参与（曲线、面积、点、自绘 K 线）或不参与（其余）主图价格区间，也不计入副图纵轴。支持的图元：`series`、`hlines`、`fills`、`markers`、`candles`、`lines`、`boxes`、`labels`、`tables`、`bg`。没有这个字段、或值是 `"sub"` 时照常画在副图；别的值记一条警告后忽略。主图脚本里这个字段没有作用。取值接口里这类序列的 `pane` 是 main。
 - 副图的增删和内置副图一样有 300 ms 的伸缩动画。替换同一个 id 时窗格不动。对不上 K 线时窗格和标题保留、内容不画，等新输出到了再画，免得窗格来回伸缩。
 - 表格贴在所属窗格的九个位置之一，不随 K 线滚动。
 
@@ -96,7 +98,7 @@ SCHEMA 没规定，参照 TradingView：
 | 填充 | 两条序列、序列和水平线、两条水平线之间；`color`/`colors` | 两条水平线、单色时填满整个窗格宽度；任一边没有值的那根不填 |
 | 水平线 | `style`、`width`、`visible` | |
 | 标记 | 12 种形状 + `char`；5 种位置；6 档尺寸；`text`、`textColor` | abovebar / belowbar 贴着输出给的最高 / 最低价往外画；labelup / labeldown 画成带箭头的气泡，`text` 在气泡里 |
-| 策略成交点 | 买入三角朝上、卖出朝下，尖在成交价；entry 实心、exit 空心；K 线宽 ≥ 6 时在旁边写 `id` | 颜色取图表的涨跌色（SCHEMA 没给颜色） |
+| 策略成交点 | 一律画在主图；买入三角朝上、卖出朝下，尖在成交价；entry 实心、exit 空心；K 线宽 ≥ 6 时在旁边写 `id` | 颜色取图表的涨跌色（SCHEMA 没给颜色） |
 | 背景色 | 主图填满主图高度，副图填满内容区 | |
 | K 线改色 | 只在蜡烛模式下生效，分时模式忽略 | |
 | 自绘 K 线 | 蜡烛和美国线（`bars: true`）；`color`/`colors` | 影线、实体、边框同色（SCHEMA 没有分开的颜色） |
@@ -139,8 +141,8 @@ SCHEMA 没规定，参照 TradingView：
 - 增量更新（`tail`）：引擎目前只发整份，没做。
 - `tooltip`：图表没有悬停，不显示。
 - `inputs`：解析成 `ScriptInput` 给 App 的参数面板用，图表不用。
-- `force_overlay` 的对象：SCHEMA 说目前留在副图，图表照画在副图，会把副图纵轴撑到价格的量级（样本 `com-trend-exhaustion-...`、`com-signed-realized-variance-...` 就是这样）。
-- 副图脚本的策略成交点画在副图（按 SCHEMA）。TradingView 是画在主图价格上的，`st-macd` 这类副图策略的成交点价格和副图纵轴不是一个量级。
+- `force_overlay` 的对象：引擎目前不给单个图元标 `pane: "main"`，这类对象还留在副图，会把副图纵轴撑到价格的量级（样本 `com-trend-exhaustion-...`、`com-signed-realized-variance-...` 就是这样）。图表已经支持 `pane: "main"`，引擎给了就会画到主图。
+- `display.data_window` 的曲线：引擎目前输出成 `visible: true`，图表照画。引擎改成 `visible: false` 后就不画了，图表这边不用改。
 - 图例、十字光标数值的界面不做，只提供 `valuesAt`。
 
 ## 测试
@@ -150,6 +152,7 @@ SCHEMA 没规定，参照 TradingView：
 | `test/script/parse_test.dart` | 16 份真输出逐类核对；protojson 版（double、科学计数法、键乱序）解析结果和原版逐字段相同；不认识的字段和枚举、`v` 不对、缺字段、坏颜色、长度不对 |
 | `test/script/align_test.dart` | 期望下标用线性扫描独立算，期望像素用公式独立算：真样本全部对象的下标；休市空档、越过最后一根、早于第一根；本地缺 `bars.to`、根数对不上、周期对不上、本地比输出短、实时新 K 线；从渲染出的图片里找线和点的像素位置（误差 0.5 像素以内） |
 | `test/script/render_golden_test.dart` | 21 张参考图：每类图元一张、全部样式两张、3 主图 + 2 副图深浅各一张、多个主图脚本叠加、和内置副图并存的横屏 |
+| `test/script/pane_test.dart` | 副图策略 `st-macd` 的成交点画在主图对应 K 线和价格上（像素核对）、副图里没有、副图纵轴只按自己的序列；手写合成样本里十类图元标 `pane: "main"` 时的解析、画的位置、主图价格区间、副图纵轴、取值接口的 `pane`；主图脚本里这个字段没有作用；2 张参考图 |
 | `test/script/update_test.dart` | 替换副图脚本只重录它的窗格；替换主图脚本只重录受影响的；十字光标不重录；替换后下一帧就是新内容；移除副图收起窗格；末根原地更新不重新对齐 |
 | `test/script/benchmark_test.dart` | 解析耗时、500 个标签首次排版、一帧的绘制耗时 |
 | `test/baseline/script_off_golden_test.dart` | 空控制器、设置了输出但隐藏：7 个场景都和基线 9d3ee15 的参考图逐像素一致 |

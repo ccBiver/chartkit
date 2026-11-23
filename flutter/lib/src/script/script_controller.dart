@@ -24,6 +24,8 @@ class ScriptValue {
   /// 设置输出时用的 id（[ScriptOutputController.setOutput] 的第一个参数）。
   final String scriptId;
   final String scriptName;
+
+  /// 这条序列画在哪个窗格（副图脚本里标了 `pane: "main"` 的序列是 main）。
   final ScriptPane pane;
   final String seriesId;
   final String title;
@@ -203,7 +205,7 @@ class ScriptOutputController extends ChangeNotifier {
         out.add(ScriptValue(
           scriptId: id,
           scriptName: o.scriptName,
-          pane: o.pane,
+          pane: s.mainPane ? ScriptPane.main : o.pane,
           seriesId: s.id,
           title: s.title,
           value: v.isNaN ? null : v,

@@ -145,7 +145,7 @@ class ResolvedScript {
         markerK = [
           for (final m in output.markers) _map(m.length, (i) => alignment.indexOfTime(m.times[i])),
         ],
-        bgRuns = [for (final runs in output.bg) _runs(runs, alignment)],
+        bgRuns = [for (final b in output.bg) _runs(b.runs, alignment)],
         barColorRuns = [for (final runs in output.barColors) _runs(runs, alignment)];
 
   final ScriptOutput output;

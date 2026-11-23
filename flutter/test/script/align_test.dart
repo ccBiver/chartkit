@@ -193,9 +193,9 @@ void main() {
           }
         }
         for (var g = 0; g < o.bg.length; g++) {
-          for (var j = 0; j < o.bg[g].length; j++) {
+          for (var j = 0; j < o.bg[g].runs.length; j++) {
             expect([r.bgRuns[g][j * 2], r.bgRuns[g][j * 2 + 1]],
-                [exp(o.bg[g][j].t1), exp(o.bg[g][j].t2)]);
+                [exp(o.bg[g].runs[j].t1), exp(o.bg[g].runs[j].t2)]);
           }
         }
         checked += o.lines.length * 2 + o.boxes.length * 2 + o.labels.length + o.trades.length;

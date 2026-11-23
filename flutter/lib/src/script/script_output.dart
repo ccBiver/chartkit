@@ -137,7 +137,11 @@ class ScriptSeries {
     required this.size,
     required this.trackPrice,
     required this.legend,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final String id;
   final ScriptSeriesKind kind;
@@ -191,7 +195,11 @@ class ScriptHLine {
     required this.style,
     required this.width,
     required this.visible,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final String id;
   final String title;
@@ -206,7 +214,15 @@ class ScriptHLine {
 
 /// 两条序列（或水平线）之间的填充。
 class ScriptFill {
-  ScriptFill({required this.a, required this.b, required this.color, required this.colors});
+  ScriptFill(
+      {required this.a,
+      required this.b,
+      required this.color,
+      required this.colors,
+      this.mainPane = false});
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   /// `between` 里两项的 id。
   final String a;
@@ -233,7 +249,11 @@ class ScriptMarkers {
     required this.times,
     required this.prices,
     required this.colors,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final String title;
   final ScriptMarkerShape shape;
@@ -283,6 +303,17 @@ class ScriptRun {
   final int color;
 }
 
+/// 一组背景色区间。
+@immutable
+class ScriptBackground {
+  const ScriptBackground(this.runs, {this.mainPane = false});
+
+  final List<ScriptRun> runs;
+
+  /// 副图脚本里这组背景色画到主图（`pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
+}
+
 /// 脚本自己画的 K 线（plotcandle / plotbar）。
 class ScriptCandles {
   ScriptCandles({
@@ -294,7 +325,11 @@ class ScriptCandles {
     required this.close,
     required this.color,
     required this.colors,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final String title;
 
@@ -325,7 +360,11 @@ class ScriptSegment {
     required this.color,
     required this.style,
     required this.width,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final int t1;
   final double p1;
@@ -369,7 +408,11 @@ class ScriptBox {
     required this.borderWidth,
     required this.borderStyle,
     required this.text,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final int t1;
   final double top;
@@ -397,7 +440,11 @@ class ScriptLabel {
     required this.size,
     required this.align,
     required this.tooltip,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final int time;
 
@@ -450,7 +497,11 @@ class ScriptTable {
     required this.borderColor,
     required this.borderWidth,
     required this.cells,
+    this.mainPane = false,
   });
+
+  /// 副图脚本里这个图元画到主图（元素上的 `pane: "main"`）。主图脚本里没有作用。
+  final bool mainPane;
 
   final ScriptTablePosition position;
   final int columns;
@@ -539,7 +590,7 @@ class ScriptOutput {
   final List<ScriptTrade> trades;
 
   /// 每项是一组背景色区间。
-  final List<List<ScriptRun>> bg;
+  final List<ScriptBackground> bg;
 
   /// 每项是一组 K 线改色区间。
   final List<List<ScriptRun>> barColors;
@@ -623,25 +674,29 @@ const _topKeys = {
   'inputs', 'warnings',
 };
 const _seriesKeys = {
+  'pane',
   'id', 'kind', 'title', 'visible', 'color', 'colors', 'values', 'width', 'style', 'step', //
   'gaps', 'base', 'variant', 'shape', 'size', 'trackPrice', 'legend',
 };
-const _hlineKeys = {'id', 'title', 'price', 'color', 'style', 'width', 'visible'};
-const _fillKeys = {'between', 'color', 'colors'};
+const _hlineKeys = {'pane', 'id', 'title', 'price', 'color', 'style', 'width', 'visible'};
+const _fillKeys = {'pane', 'between', 'color', 'colors'};
 const _markerKeys = {
+  'pane',
   'title', 'shape', 'location', 'size', 'char', 'text', 'textColor', 'points', //
 };
 const _tradeKeys = {'t', 'price', 'side', 'kind', 'qty', 'id', 'comment'};
 const _runsKeys = {'runs'};
-const _candleKeys = {'title', 'bars', 'open', 'high', 'low', 'close', 'color', 'colors'};
-const _lineKeys = {'t1', 'p1', 't2', 'p2', 'extend', 'color', 'style', 'width'};
-const _boxKeys = {'t1', 'top', 't2', 'bottom', 'extend', 'bg', 'border', 'text'};
+const _bgKeys = {'runs', 'pane'};
+const _candleKeys = {'pane', 'title', 'bars', 'open', 'high', 'low', 'close', 'color', 'colors'};
+const _lineKeys = {'pane', 't1', 'p1', 't2', 'p2', 'extend', 'color', 'style', 'width'};
+const _boxKeys = {'pane', 't1', 'top', 't2', 'bottom', 'extend', 'bg', 'border', 'text'};
 const _borderKeys = {'color', 'width', 'style'};
 const _boxTextKeys = {'text', 'color', 'size', 'halign', 'valign'};
 const _labelKeys = {
+  'pane',
   't', 'p', 'yloc', 'text', 'style', 'color', 'textColor', 'size', 'align', 'tooltip', //
 };
-const _tableKeys = {'position', 'columns', 'rows', 'bg', 'frame', 'border', 'cells'};
+const _tableKeys = {'pane', 'position', 'columns', 'rows', 'bg', 'frame', 'border', 'cells'};
 const _frameKeys = {'color', 'width'};
 const _inputKeys = {
   'id', 'type', 'title', 'default', 'min', 'max', 'step', 'options', 'group', 'tooltip', //
@@ -834,7 +889,7 @@ class _Parser {
       fills: _each(json['fills'], 'fills', (v, w) => _fill(v, w, ids)),
       markers: _each(json['markers'], 'markers', _markers),
       trades: _each(json['trades'], 'trades', _trade),
-      bg: _each(json['bg'], 'bg', _runs),
+      bg: _each(json['bg'], 'bg', _background),
       barColors: _each(json['barColors'], 'barColors', _runs),
       candles: _each(json['candles'], 'candles', _candles),
       lines: _each(json['lines'], 'lines', _segment),
@@ -846,6 +901,14 @@ class _Parser {
         for (final w in _list(json['warnings'], 'warnings')) _str(w),
       ]),
     );
+  }
+
+  /// 单个图元上的 `pane`：`"main"` 表示副图脚本里这个图元画到主图；没有这个字段或 `"sub"` 时照常。
+  bool _mainPane(Object? v, String where) {
+    if (v == null || v == 'sub') return false;
+    if (v == 'main') return true;
+    _warn('unknown $where.pane "$v", ignored');
+    return false;
   }
 
   ScriptBars _bars(Object? v) {
@@ -897,6 +960,7 @@ class _Parser {
     final kind = _enumOrSkip(_kinds, v['kind'], '$where.kind');
     if (kind == null) return null;
     return ScriptSeries(
+      mainPane: _mainPane(v['pane'], where),
       id: id,
       kind: kind,
       title: _str(v['title']),
@@ -924,6 +988,7 @@ class _Parser {
     final price = _double(v['price']);
     if (id == null || price == null) return _skip(where, 'no id or price');
     return ScriptHLine(
+      mainPane: _mainPane(v['pane'], where),
       id: id,
       title: _str(v['title']),
       price: price,
@@ -945,7 +1010,11 @@ class _Parser {
       return _skip(where, 'between refers to an unknown id ($a, $b)');
     }
     return ScriptFill(
-        a: a, b: b, color: _color(v['color'], where), colors: _colors(v['colors'], where));
+        mainPane: _mainPane(v['pane'], where),
+        a: a,
+        b: b,
+        color: _color(v['color'], where),
+        colors: _colors(v['colors'], where));
   }
 
   ScriptMarkers? _markers(Object? v, String where) {
@@ -974,6 +1043,7 @@ class _Parser {
     if (bad > 0) _warn('$where has $bad malformed points, skipped');
     final text = _strOrNull(v['text']);
     return ScriptMarkers(
+      mainPane: _mainPane(v['pane'], where),
       title: _str(v['title']),
       shape: shape,
       location: _enum(_locations, v['location'], ScriptMarkerLocation.abovebar, '$where.location'),
@@ -1006,9 +1076,16 @@ class _Parser {
     );
   }
 
+  ScriptBackground? _background(Object? v, String where) {
+    final runs = _runs(v, where);
+    if (runs == null) return null;
+    return ScriptBackground(runs, mainPane: _mainPane((v as Map)['pane'], where));
+  }
+
   List<ScriptRun>? _runs(Object? v, String where) {
     if (v is! Map) return _skip(where);
-    _checkKeys(v, _runsKeys, where.startsWith('bg') ? 'bg' : 'barColors');
+    _checkKeys(v, where.startsWith('bg') ? _bgKeys : _runsKeys,
+        where.startsWith('bg') ? 'bg' : 'barColors');
     final out = <ScriptRun>[];
     var bad = 0;
     for (final r in _list(v['runs'], '$where.runs')) {
@@ -1029,6 +1106,7 @@ class _Parser {
     if (v is! Map) return _skip(where);
     _checkKeys(v, _candleKeys, 'candles');
     return ScriptCandles(
+      mainPane: _mainPane(v['pane'], where),
       title: _str(v['title']),
       bars: _bool(v['bars'], false),
       open: _values(v['open'], '$where.open'),
@@ -1047,6 +1125,7 @@ class _Parser {
     final p1 = _double(v['p1']), p2 = _double(v['p2']);
     if (t1 == null || t2 == null || p1 == null || p2 == null) return _skip(where, 'no coordinates');
     return ScriptSegment(
+      mainPane: _mainPane(v['pane'], where),
       t1: t1,
       p1: p1,
       t2: t2,
@@ -1084,6 +1163,7 @@ class _Parser {
       }
     }
     return ScriptBox(
+      mainPane: _mainPane(v['pane'], where),
       t1: t1,
       top: top,
       t2: t2,
@@ -1105,6 +1185,7 @@ class _Parser {
     final t = _int(v['t']);
     if (t == null) return _skip(where, 'no time');
     return ScriptLabel(
+      mainPane: _mainPane(v['pane'], where),
       time: t,
       price: _double(v['p']) ?? double.nan,
       yloc: _enum(_ylocs, v['yloc'], ScriptYLoc.price, '$where.yloc'),
@@ -1152,6 +1233,7 @@ class _Parser {
     final columns = _int(v['columns']) ?? 0;
     final rows = _int(v['rows']) ?? 0;
     return ScriptTable(
+      mainPane: _mainPane(v['pane'], where),
       position: _enum(_positions, v['position'], ScriptTablePosition.topRight, '$where.position'),
       columns: [columns, for (final c in cells) c.column + 1].reduce((a, b) => a > b ? a : b),
       rows: [rows, for (final c in cells) c.row + 1].reduce((a, b) => a > b ? a : b),

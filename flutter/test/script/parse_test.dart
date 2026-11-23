@@ -44,7 +44,8 @@ Object? describe(ScriptOutput o) => {
       'bg': [
         for (final g in o.bg)
           [
-            for (final r in g) [r.t1, r.t2, r.color]
+            g.mainPane,
+            for (final r in g.runs) [r.t1, r.t2, r.color],
           ],
       ],
       'barColors': [

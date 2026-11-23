@@ -131,7 +131,8 @@ class ScriptPaintConfig {
   final Object themeKey;
 }
 
-/// 主图价格区间要容下的脚本数值：主图脚本里可见的曲线、面积、点和自绘 K 线（不含柱、水平线和对象）。
+/// 主图价格区间要容下的脚本数值：画在主图上的可见曲线、面积、点和自绘 K 线（不含柱、水平线和对象）。
+/// 副图脚本里标了 `pane: "main"` 的序列和自绘 K 线也算。
 ({double min, double max})? scriptMainRange(List<ScriptEntry> scripts, int first, int last) {
   var lo = double.infinity;
   var hi = double.negativeInfinity;
@@ -142,19 +143,20 @@ class ScriptPaintConfig {
 
   for (final (_, r, _) in scripts) {
     final o = r.output;
-    if (o.pane != ScriptPane.main) continue;
+    final whole = o.pane == ScriptPane.main;
     final from = r.alignment.fromIndex;
     final i0 = math.max(0, first - from);
     final i1 = math.min(o.bars.count - 1, last - from);
     if (i1 < i0) continue;
     for (final s in o.series) {
-      if (!s.visible || s.kind == ScriptSeriesKind.bar) continue;
+      if (!s.visible || s.kind == ScriptSeriesKind.bar || !(whole || s.mainPane)) continue;
       for (var i = i0; i <= i1; i++) {
         final v = s.values[i];
         if (v.isFinite) take(v);
       }
     }
     for (final c in o.candles) {
+      if (!(whole || c.mainPane)) continue;
       for (var i = i0; i <= i1; i++) {
         if (c.high[i].isFinite) take(c.high[i]);
         if (c.low[i].isFinite) take(c.low[i]);
@@ -218,23 +220,39 @@ class ScriptLayersPainter {
   void paintMainUnder() {
     final pane = _PaneGeom.main(layout);
     for (final (id, r, version) in scripts) {
-      if (r.output.pane != ScriptPane.main || r.output.bg.isEmpty) continue;
+      final o = r.output;
+      final any = o.pane == ScriptPane.main ? o.bg.isNotEmpty : o.bg.any((b) => b.mainPane);
+      if (!any) continue;
       _replay('under:$id', (version, _xKey, pane.key), id, (c) {
-        _ScriptPainter(c, layout, pane, r, config, formatter).paintBackground();
+        _ScriptPainter(c, layout, pane, r, config, formatter, onMain: true).paintBackground();
       });
     }
   }
 
-  /// 主图上的其余图元，叠在 K 线和主图指标上。
+  /// 主图上的其余图元，叠在 K 线和主图指标上：主图脚本的全部图元，
+  /// 以及副图脚本的策略成交点和标了 `pane: "main"` 的图元。
   void paintMainOver() {
     final pane = _PaneGeom.main(layout);
     for (final (id, r, version) in scripts) {
-      if (r.output.pane != ScriptPane.main) continue;
+      if (!_hasMainContent(r.output)) continue;
       _replay('main:$id', (version, _xKey, pane.key), id, (c) {
-        _ScriptPainter(c, layout, pane, r, config, formatter).paintContent();
+        _ScriptPainter(c, layout, pane, r, config, formatter, onMain: true).paintContent();
       });
     }
   }
+
+  static bool _hasMainContent(ScriptOutput o) =>
+      o.pane == ScriptPane.main ||
+      o.trades.isNotEmpty ||
+      o.series.any((e) => e.mainPane) ||
+      o.hlines.any((e) => e.mainPane) ||
+      o.fills.any((e) => e.mainPane) ||
+      o.markers.any((e) => e.mainPane) ||
+      o.candles.any((e) => e.mainPane) ||
+      o.lines.any((e) => e.mainPane) ||
+      o.boxes.any((e) => e.mainPane) ||
+      o.labels.any((e) => e.mainPane) ||
+      o.tables.any((e) => e.mainPane);
 
   /// 副图脚本，[panes] 和 [ids] 一一对应。
   void paintSubPanes(List<SubPaneRect> panes, List<String> ids) {
@@ -280,7 +298,7 @@ class ScriptLayersPainter {
     final lo = text.layout(fmt(range.min), config.fontSize, colors.axisText, ScriptHAlign.right);
     hi.paint(c, Offset(layout.size.width - 4 - hi.width, pane.contentTop));
     lo.paint(c, Offset(layout.size.width - 4 - lo.width, contentBottom - lo.height));
-    _ScriptPainter(c, layout, geom, r, config, formatter)
+    _ScriptPainter(c, layout, geom, r, config, formatter, onMain: false)
       ..paintBackground()
       ..paintContent();
     c.restore();
@@ -301,6 +319,7 @@ class ScriptLayersPainter {
   }
 
   /// 副图纵轴：可见范围内的序列（含柱、面积的基线）、水平线、自绘 K 线和各类对象的数值，上下各留 5%。
+  /// 画到主图的（策略成交点、标了 `pane: "main"` 的图元）不算。
   ({double min, double max}) _subRange(ResolvedScript r) {
     final o = r.output;
     final vis = _VisibleRange.of(layout);
@@ -316,7 +335,7 @@ class ScriptLayersPainter {
     final i0 = math.max(0, vis.first - from);
     final i1 = math.min(o.bars.count - 1, vis.last - from);
     for (final s in o.series) {
-      if (!s.visible) continue;
+      if (!s.visible || s.mainPane) continue;
       var any = false;
       for (var i = i0; i <= i1; i++) {
         final v = s.values[i];
@@ -328,17 +347,19 @@ class ScriptLayersPainter {
       if (any && (s.kind == ScriptSeriesKind.bar || s.kind == ScriptSeriesKind.area)) take(s.base);
     }
     for (final c in o.candles) {
+      if (c.mainPane) continue;
       for (var i = i0; i <= i1; i++) {
         take(c.high[i]);
         take(c.low[i]);
       }
     }
     for (final h in o.hlines) {
-      if (h.visible) take(h.price);
+      if (h.visible && !h.mainPane) take(h.price);
     }
     bool seen(int a, int b) => math.max(a, b) >= vis.first && math.min(a, b) <= vis.last;
     for (var j = 0; j < o.lines.length; j++) {
       final l = o.lines[j];
+      if (l.mainPane) continue;
       if (l.extend != ScriptExtend.none || seen(r.segK1[j], r.segK2[j])) {
         take(l.p1);
         take(l.p2);
@@ -346,20 +367,18 @@ class ScriptLayersPainter {
     }
     for (var j = 0; j < o.boxes.length; j++) {
       final b = o.boxes[j];
+      if (b.mainPane) continue;
       if (b.extend != ScriptExtend.none || seen(r.boxK1[j], r.boxK2[j])) {
         take(b.top);
         take(b.bottom);
       }
     }
     for (var j = 0; j < o.labels.length; j++) {
-      if (seen(r.labelK[j], r.labelK[j])) take(o.labels[j].price);
-    }
-    for (var j = 0; j < o.trades.length; j++) {
-      if (seen(r.tradeK[j], r.tradeK[j])) take(o.trades[j].price);
+      if (!o.labels[j].mainPane && seen(r.labelK[j], r.labelK[j])) take(o.labels[j].price);
     }
     for (var g = 0; g < o.markers.length; g++) {
       final m = o.markers[g];
-      if (m.location != ScriptMarkerLocation.absolute) continue;
+      if (m.location != ScriptMarkerLocation.absolute || m.mainPane) continue;
       final ks = r.markerK[g];
       for (var j = 0; j < m.length; j++) {
         if (seen(ks[j], ks[j])) take(m.prices[j]);
@@ -435,9 +454,16 @@ class _VisibleRange {
 
 /// 一个脚本在一个窗格里的绘制。
 class _ScriptPainter {
-  _ScriptPainter(this.canvas, this.layout, this.pane, this.r, this.config, this.formatter)
+  _ScriptPainter(this.canvas, this.layout, this.pane, this.r, this.config, this.formatter,
+      {required this.onMain})
       : o = r.output,
         vis = _VisibleRange.of(layout);
+
+  /// 画在主图（true）还是脚本自己的副图（false）。
+  final bool onMain;
+
+  /// 这个图元画不画在当前窗格：主图脚本的都画；副图脚本里标了 `pane: "main"` 的画在主图，其余画在副图。
+  bool _here(bool mainPane) => o.pane == ScriptPane.main || mainPane == onMain;
 
   final Canvas canvas;
   final ChartLayout layout;
@@ -493,7 +519,8 @@ class _ScriptPainter {
     canvas.save();
     canvas.clipRect(pane.rect);
     for (var g = 0; g < o.bg.length; g++) {
-      final runs = o.bg[g];
+      if (!_here(o.bg[g].mainPane)) continue;
+      final runs = o.bg[g].runs;
       final k = r.bgRuns[g];
       for (var j = 0; j < runs.length; j++) {
         final a = k[j * 2], b = k[j * 2 + 1];
@@ -516,17 +543,17 @@ class _ScriptPainter {
     canvas.clipRect(pane.rect);
     _fills();
     for (final h in o.hlines) {
-      if (!h.visible) continue;
+      if (!h.visible || !_here(h.mainPane)) continue;
       final c = o.colorOf(h.color);
       if (c == null) continue;
       final yy = y(h.price);
       _styledLine(Offset(pane.left, yy), Offset(pane.right, yy), c, h.width, h.style);
     }
     for (final cs in o.candles) {
-      _candles(cs);
+      if (_here(cs.mainPane)) _candles(cs);
     }
     for (final s in o.series) {
-      if (!s.visible) continue;
+      if (!s.visible || !_here(s.mainPane)) continue;
       switch (s.kind) {
         case ScriptSeriesKind.line:
           _line(s, area: false);
@@ -539,20 +566,21 @@ class _ScriptPainter {
       }
     }
     for (var g = 0; g < o.markers.length; g++) {
-      _markers(o.markers[g], r.markerK[g]);
+      if (_here(o.markers[g].mainPane)) _markers(o.markers[g], r.markerK[g]);
     }
-    _trades();
+    // 策略成交点一律画在主图的价格上
+    if (onMain) _trades();
     for (var j = 0; j < o.boxes.length; j++) {
-      _box(o.boxes[j], r.boxK1[j], r.boxK2[j]);
+      if (_here(o.boxes[j].mainPane)) _box(o.boxes[j], r.boxK1[j], r.boxK2[j]);
     }
     for (var j = 0; j < o.lines.length; j++) {
-      _segment(o.lines[j], r.segK1[j], r.segK2[j]);
+      if (_here(o.lines[j].mainPane)) _segment(o.lines[j], r.segK1[j], r.segK2[j]);
     }
     for (var j = 0; j < o.labels.length; j++) {
-      _label(o.labels[j], r.labelK[j]);
+      if (_here(o.labels[j].mainPane)) _label(o.labels[j], r.labelK[j]);
     }
     for (final t in o.tables) {
-      _table(t);
+      if (_here(t.mainPane)) _table(t);
     }
     canvas.restore();
     _trackPrices();
@@ -680,6 +708,7 @@ class _ScriptPainter {
     final hlines = {for (final h in o.hlines) h.id: h};
     final (i0, i1) = _valueRange;
     for (final f in o.fills) {
+      if (!_here(f.mainPane)) continue;
       final ha = hlines[f.a], hb = hlines[f.b];
       if (ha != null && hb != null && f.colors == null) {
         // 两条水平线之间：整个窗格宽度
@@ -1192,7 +1221,7 @@ class _ScriptPainter {
 
   void _trackPrices() {
     for (final s in o.series) {
-      if (!s.visible || !s.trackPrice) continue;
+      if (!s.visible || !s.trackPrice || !_here(s.mainPane)) continue;
       var i = math.min(o.bars.count - 1, layout.itemCount - 1 - from);
       while (i >= 0 && s.values[i].isNaN) {
         i--;
