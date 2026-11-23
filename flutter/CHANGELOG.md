@@ -1,5 +1,8 @@
 ## Unreleased
 
+- 新增脚本图元渲染（默认关闭）：`KLineChart.scriptOutputs` 传入 `ScriptOutputController` 后，把服务端脚本引擎的
+  图元 JSON（SCHEMA v1）画到图上：15 类图元，主图脚本叠在 K 线上，副图脚本各占一个窗格。按脚本 id 设置、替换、移除，
+  替换时只重画受影响的窗格；`valuesAt` 给图例和十字光标取值。不传时界面和手势不变。说明见 `PRIMITIVES.md`。
 - 新增画线工具（默认关闭）：`KLineChart.drawingController` 传入 `DrawingController` 后开启。12 个工具：水平线、垂直线、
   趋势线、射线、矩形、斐波那契回撤、价格区间测量、多头/空头头寸、江恩扇形、安德鲁分叉、艾略特波浪。支持选中、
   拖端点、整体拖动、锁定、删除、显示开关、清除全部、JSON 保存恢复。不传时界面和手势不变。说明见 `DRAWING.md`。

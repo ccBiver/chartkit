@@ -130,6 +130,16 @@ drawings.tool = DrawingTool.trendLine; // 进入新建，单击落点
 
 12 个画线工具、手势、保存恢复见 [DRAWING.md](DRAWING.md)。不传 `drawingController` 时图表不变。
 
+### 脚本图元
+
+```dart
+final scripts = ScriptOutputController(onAlignmentIssue: (issue) => refetch(issue.scriptId));
+// KLineChart(scriptOutputs: scripts)
+scripts.setJson('rsi', output); // 服务端脚本引擎的图元 JSON（SCHEMA v1），按脚本 id 设置或替换
+```
+
+15 类图元、对齐规则、取值接口见 [PRIMITIVES.md](PRIMITIVES.md)。不传 `scriptOutputs` 时图表不变。
+
 ### 现价标签：倒计时与盘口贴纸
 
 ```dart

@@ -19,3 +19,7 @@ export 'src/drawing/drawing_controller.dart';
 export 'src/drawing/drawing_geometry.dart'
     show DrawingTimeline, PositionStats, RangeStats, positionStats, gannFanRatios;
 export 'src/drawing/drawing_theme.dart';
+export 'src/script/script_align.dart'
+    show ScriptAlignment, ScriptAlignmentIssue, ScriptAlignmentProblem, alignScriptOutput;
+export 'src/script/script_controller.dart';
+export 'src/script/script_output.dart';
