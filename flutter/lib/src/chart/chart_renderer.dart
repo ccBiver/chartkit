@@ -196,15 +196,16 @@ class ChartRenderer {
     for (var r = 0; r <= rows; r++) {
       final y = l.mainTop + (l.mainBottom - l.mainTop) * r / rows;
       line(theme.grid, Offset(0, y), Offset(l.chartWidth, y));
-      final price = l.priceMax - (l.priceMax - l.priceMin) * r / rows;
+      // 对数刻度下网格仍等分，标的是那一格对应的价格
+      final price = l.logScale ? l.yToPrice(y) : l.priceMax - (l.priceMax - l.priceMin) * r / rows;
       // 最上面一档贴着画布上沿：基线下移到整行可见，避免被裁掉
       final baseline = math.max(y + text.scaledFontSize / 3, text.scaledFontSize);
       _rightAlignedText(formatter.price(price), baseline, theme.axisText);
     }
   }
 
-  /// 分时：收盘价折线 + 填充。
-  void drawTimeLine() {
+  /// 分时：收盘价折线 + 填充。[withFill] 为 false 时只画折线（折线图）。
+  void drawTimeLine({bool withFill = true}) {
     final l = layout;
     if (revealLast < l.firstIndex) return;
     final stroke = Path();
@@ -224,15 +225,17 @@ class ChartRenderer {
       }
       lastX = x;
     }
-    fill
-      ..lineTo(lastX, l.mainBottom)
-      ..close();
-    final shader = Gradient.linear(
-      Offset(0, l.mainTop),
-      Offset(0, l.mainBottom),
-      [theme.timeLineFillTop, theme.timeLineFillBottom],
-    );
-    canvas.drawPath(fill, Paint()..shader = shader);
+    if (withFill) {
+      fill
+        ..lineTo(lastX, l.mainBottom)
+        ..close();
+      final shader = Gradient.linear(
+        Offset(0, l.mainTop),
+        Offset(0, l.mainBottom),
+        [theme.timeLineFillTop, theme.timeLineFillBottom],
+      );
+      canvas.drawPath(fill, Paint()..shader = shader);
+    }
     _stroke
       ..color = theme.timeLineStroke
       ..strokeWidth = 2 * unit;
@@ -252,6 +255,23 @@ class ChartRenderer {
       final top = math.min(yOpen, yClose);
       line(color, Offset(x, l.priceToY(c.high)), Offset(x, l.priceToY(c.low)), 1.2);
       rect(color, Rect.fromLTWH(x - bw / 2, top, bw, math.max(unit, (yOpen - yClose).abs())));
+    }
+  }
+
+  /// 美国线：竖线是最高到最低，左边短横是开盘价，右边短横是收盘价。
+  /// 短横长度是实体宽度的一半；[colorOf] 同 [drawCandles]。
+  void drawOhlcBars({Color? Function(int index)? colorOf}) {
+    final l = layout;
+    final tick = math.max(unit, bodyWidth / 2);
+    for (var i = l.firstIndex; i <= revealLast; i++) {
+      final c = candles[i];
+      final x = l.centerX(i);
+      final color = colorOf?.call(i) ?? (c.isBullish ? up : down);
+      final yOpen = l.priceToY(c.open);
+      final yClose = l.priceToY(c.close);
+      line(color, Offset(x, l.priceToY(c.high)), Offset(x, l.priceToY(c.low)), 1.2);
+      line(color, Offset(x - tick, yOpen), Offset(x, yOpen), 1.2);
+      line(color, Offset(x, yClose), Offset(x + tick, yClose), 1.2);
     }
   }
 

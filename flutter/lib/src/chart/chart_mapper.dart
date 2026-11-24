@@ -38,6 +38,9 @@ class KLineChartMapper {
   /// 单根蜡烛宽度（含间隙）。
   double get candleWidth => _layout.candleWidth;
 
+  /// 主图价格轴是否按对数刻度（[priceToY]、[yToPrice] 已按它换算）。
+  bool get logScale => _layout.logScale;
+
   /// 价格 → 主图像素 Y。
   double priceToY(double price) => _layout.priceToY(price);
 
@@ -71,7 +74,8 @@ class KLineChartMapper {
           other._layout.rightFloat == _layout.rightFloat &&
           other._layout.priceMin == _layout.priceMin &&
           other._layout.priceMax == _layout.priceMax &&
-          other._layout.itemCount == _layout.itemCount;
+          other._layout.itemCount == _layout.itemCount &&
+          other._layout.logScale == _layout.logScale;
 
   @override
   int get hashCode => Object.hash(
@@ -84,5 +88,6 @@ class KLineChartMapper {
         _layout.priceMin,
         _layout.priceMax,
         _layout.itemCount,
+        _layout.logScale,
       );
 }

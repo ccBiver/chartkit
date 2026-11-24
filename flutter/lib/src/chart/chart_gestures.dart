@@ -9,6 +9,7 @@ import 'chart_renderer.dart';
 import 'chart_types.dart';
 import 'k_line_chart.dart';
 import 'k_line_chart_state.dart';
+import 'replay_controller.dart';
 
 /// 低于此速度（逻辑像素/秒）的松手不触发惯性滚动。
 const double _minFlingVelocity = 50;
@@ -40,7 +41,7 @@ class ChartGestures {
   double _scaleStartWidth = 0;
 
   KLineChart get _widget => _widgetOf();
-  KLineChartState get _state => _widget.state;
+  KLineChartState get _state => shownState(_widget);
 
   /// 宿主是否暂时锁住了视口（如正在拖拽图层上的改价标签）。
   bool get _locked => _widget.isViewportLocked?.call() ?? false;
@@ -146,6 +147,7 @@ class ChartGestures {
   // ───────────────────────── 点击 ─────────────────────────
 
   void onTapUp(TapUpDetails details) {
+    if (pickReplayStart(details.localPosition)) return;
     if (_state.crosshairIndex >= 0) return clearCrosshair(); // 常驻浮窗：点击空白处消失
     // 松手即消失模式：点击蜡烛上的买卖标记 → 回调
     final mark = _widget.crosshairDismiss == CrosshairDismiss.onRelease
@@ -155,6 +157,16 @@ class ChartGestures {
     if (_widget.crosshairTrigger == CrosshairTrigger.tapOrLongPress) {
       _moveCrosshair(details.localPosition);
     }
+  }
+
+  /// 回放选起点时，点击处的那根作为起点。返回是否处理了这次点击。
+  bool pickReplayStart(Offset position) {
+    final replay = _widget.replay;
+    final layout = _layoutOf();
+    if (replay == null || replay.phase != ReplayPhase.picking || layout == null) return false;
+    clearCrosshair();
+    replay.select(layout.indexAtX(position.dx));
+    return true;
   }
 
   /// 离 [x] 最近、且在一根蜡烛宽度内的可见买卖标记。

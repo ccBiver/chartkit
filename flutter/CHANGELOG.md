@@ -1,5 +1,13 @@
 ## Unreleased
 
+- 新增图表类型（默认仍是蜡烛图）：`ChartMode.ohlc` 美国线、`ChartMode.line` 折线图、`ChartMode.area` 面积图。
+  折线图和面积图复用分时的画法，价格区间只看收盘价；三者都照常画主图指标和脚本图元。
+- 新增主图对数坐标（默认关闭）：`KLineChart.logScale`。价格换算、网格标签、现价、十字光标、自动价格区间、画线和
+  脚本图元都按对数算，非正数不计入价格区间；副图和成交量不变。`KLineChartMapper` 加 `logScale`。
+- 新增 K 线回放（默认关闭）：`KLineChart.replay` 传入 `ChartReplayController`。选起点、下一根、播放暂停和倍速、
+  重选起点、退出；回放时本地指标按截断数据重算，实时行情不影响回放，脚本图元只画到游标。控制条由宿主做。
+- 新增 `combineCandles` / `combineCandle` / `CombineOp`：两个品种的 K 线按开盘时间对齐后加减乘除（合成图）。
+- 十字光标浮窗在图太窄、放不下时整体挪回图内，不再被裁掉；放得下时位置不变。说明见 `CHART_TOOLS.md`。
 - 新增脚本图元渲染（默认关闭）：`KLineChart.scriptOutputs` 传入 `ScriptOutputController` 后，把服务端脚本引擎的
   图元 JSON（SCHEMA v1）画到图上：15 类图元，主图脚本叠在 K 线上，副图脚本各占一个窗格。按脚本 id 设置、替换、移除，
   替换时只重画受影响的窗格；`valuesAt` 给图例和十字光标取值。不传时界面和手势不变。说明见 `PRIMITIVES.md`。

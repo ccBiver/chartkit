@@ -5,6 +5,7 @@ import 'chart_renderer.dart';
 import 'chart_types.dart';
 import 'crosshair_panel.dart';
 import 'k_line_chart.dart';
+import 'replay_controller.dart';
 
 /// 主图指标读数图例（左上角）：每个主图指标占一行，行内是该指标的各条线。
 /// 无十字光标时显示最新根并带数字滚动；拖动十字光标时即时显示命中根。
@@ -20,17 +21,18 @@ class ChartLegend extends StatelessWidget {
         top: 3,
         right: 8,
         child: IgnorePointer(
-          child: ListenableBuilder(listenable: chart.state, builder: (context, _) => _rows()),
+          child: ListenableBuilder(listenable: shownState(chart), builder: (context, _) => _rows()),
         ),
       );
 
   Widget _rows() {
-    final candles = chart.state.candles;
+    final state = shownState(chart);
+    final candles = state.candles;
     final series = seriesOf();
     if (candles.isEmpty || series.isEmpty || chart.mode == ChartMode.timeLine) {
       return const SizedBox.shrink();
     }
-    final crosshair = chart.state.crosshairIndex;
+    final crosshair = state.crosshairIndex;
     final onCandle = crosshair >= 0 && crosshair < candles.length;
     final focus = onCandle ? crosshair : candles.length - 1;
     final theme = chart.theme;
@@ -76,9 +78,9 @@ class ChartCrosshairPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: chart.state,
+        listenable: shownState(chart),
         builder: (context, _) {
-          final state = chart.state;
+          final state = shownState(chart);
           final index = state.crosshairIndex;
           final visible = index >= 0 && index < state.candles.length;
           final fingerOnLeft = state.crosshairX >= 0 && state.crosshairX <= chartWidth / 2;
@@ -86,11 +88,15 @@ class ChartCrosshairPanel extends StatelessWidget {
           final mapper = state.mapper.value;
           final rightAxis = mapper == null ? 0.0 : mapper.size.width - mapper.mainRect.width;
           // 隐藏时也保持为定位子项，避免未定位的空组件影响外层 Stack 的尺寸
-          return Positioned(
-            top: 18 + chart.crosshairPanelMargin.top,
-            left: fingerOnLeft ? null : 8 + chart.crosshairPanelMargin.left,
-            right: fingerOnLeft ? 8 + rightAxis + chart.crosshairPanelMargin.right : null,
-            child: visible ? _panel(_rows(index)) : const SizedBox.shrink(),
+          return Positioned.fill(
+            child: CustomSingleChildLayout(
+              delegate: _PanelPosition(
+                top: 18 + chart.crosshairPanelMargin.top,
+                left: fingerOnLeft ? null : 8 + chart.crosshairPanelMargin.left,
+                right: fingerOnLeft ? 8 + rightAxis + chart.crosshairPanelMargin.right : null,
+              ),
+              child: visible ? _panel(_rows(index)) : const SizedBox.shrink(),
+            ),
           );
         },
       );
@@ -102,7 +108,7 @@ class ChartCrosshairPanel extends StatelessWidget {
       );
 
   List<CrosshairDetailRow> _rows(int index) {
-    final state = chart.state;
+    final state = shownState(chart);
     final candle = state.candles[index];
     final base = chart.crosshairDetail?.call(candle) ??
         defaultCrosshairRows(
@@ -125,6 +131,29 @@ class ChartCrosshairPanel extends StatelessWidget {
     );
     return [...base, ...?chart.crosshairExtraRows?.call(candle), ...marks];
   }
+}
+
+/// 浮窗的位置：贴左（[left]）或贴右（[right]）；图太窄放不下时整体挪回图内，不被裁掉。
+class _PanelPosition extends SingleChildLayoutDelegate {
+  const _PanelPosition({required this.top, this.left, this.right});
+
+  final double top;
+  final double? left;
+  final double? right;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) => const BoxConstraints();
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final x = left ?? size.width - right! - childSize.width;
+    final maxX = size.width - childSize.width;
+    return Offset(maxX <= 0 ? 0 : x.clamp(0.0, maxX), top);
+  }
+
+  @override
+  bool shouldRelayout(_PanelPosition old) =>
+      old.top != top || old.left != left || old.right != right;
 }
 
 /// 钉在主图区域内的浮层：Logo 水印与左下角全屏按钮。[mainBottom] 为主图底边 y。

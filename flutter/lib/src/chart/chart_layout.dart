@@ -111,9 +111,11 @@ class ChartLayout {
     required this.priceMin,
     required this.priceMax,
     required this.itemCount,
+    required this.logScale,
   });
 
   /// [candles] 不可为空；[candleWidth] 必须 > 0。
+  /// [logScale] 时主图价格轴按对数刻度：价格区间只看正数，上下留白按对数算。
   factory ChartLayout.compute({
     required Size size,
     required List<Candle> candles,
@@ -129,6 +131,8 @@ class ChartLayout {
     required String Function(double price) formatPrice,
     required double labelPad,
     ({double min, double max})? Function(int first, int last)? extraMainRange,
+    bool closeOnly = false,
+    bool logScale = false,
   }) {
     assert(candles.isNotEmpty && candleWidth > 0);
     final last = candles.length - 1;
@@ -156,7 +160,8 @@ class ChartLayout {
     // 自适应右轴：先用最小留白粗算可见价格区间，量出最宽价格标签，
     // 把右轴撑到「最长价格 + 内边距」，蜡烛区不会被价格标签压住。
     final rough = viewport(math.max(1.0, size.width - dims.rightAxisWidth));
-    final roughRange = _priceRange(candles, mainSeries, rough.first, rough.last, extraMainRange);
+    final roughRange =
+        _priceRange(candles, mainSeries, rough.first, rough.last, extraMainRange, closeOnly, logScale);
     final widest = math.max(
       measureText(formatPrice(roughRange.max)),
       measureText(formatPrice(roughRange.min)),
@@ -172,7 +177,8 @@ class ChartLayout {
       subWeights: subWeights,
     );
     final vp = viewport(chartWidth);
-    final range = _priceRange(candles, mainSeries, vp.first, vp.last, extraMainRange);
+    final range =
+        _priceRange(candles, mainSeries, vp.first, vp.last, extraMainRange, closeOnly, logScale);
 
     return ChartLayout._(
       size: size,
@@ -192,6 +198,7 @@ class ChartLayout {
       priceMin: range.min,
       priceMax: range.max,
       itemCount: candles.length,
+      logScale: logScale,
     );
   }
 
@@ -225,6 +232,9 @@ class ChartLayout {
   final double priceMax;
   final int itemCount;
 
+  /// 主图价格轴是否按对数刻度。
+  final bool logScale;
+
   double get mainTop => 0;
 
   double get rightAxisWidth => size.width - chartWidth;
@@ -242,15 +252,35 @@ class ChartLayout {
   }
 
   /// 价格 → 主图像素 Y。
-  double priceToY(double price) => valueToY(price, mainTop, mainBottom, priceMin, priceMax);
+  double priceToY(double price) =>
+      priceToPixel(price, mainTop, mainBottom, priceMin, priceMax, log: logScale);
 
   /// 主图像素 Y → 价格（[priceToY] 的反函数）。
   double yToPrice(double y) =>
-      priceMax - (y - mainTop) / (mainBottom - mainTop) * (priceMax - priceMin);
+      pixelToPrice(y, mainTop, mainBottom, priceMin, priceMax, log: logScale);
 
   /// 把数值 [v] 从区间 [lo]..[hi] 线性映射到像素区间 [top]..[bottom]（大值在上）。
   static double valueToY(double v, double top, double bottom, double lo, double hi) =>
       top + (hi - v) / (hi - lo) * (bottom - top);
+
+  /// 主图的价格 → 像素：[log] 时按 log10 映射（非正数当成极小的正数，落到窗格下方很远处）。
+  /// 画线、脚本图元和渲染层都用它，保证同一个价格落在同一个像素上。
+  static double priceToPixel(double v, double top, double bottom, double lo, double hi,
+      {bool log = false}) {
+    if (!log) return valueToY(v, top, bottom, lo, hi);
+    final l = _log(hi);
+    return top + (l - _log(v)) / (l - _log(lo)) * (bottom - top);
+  }
+
+  /// [priceToPixel] 的反函数。
+  static double pixelToPrice(double y, double top, double bottom, double lo, double hi,
+      {bool log = false}) {
+    if (!log) return hi - (y - top) / (bottom - top) * (hi - lo);
+    final l = _log(hi);
+    return math.pow(10, l - (y - top) / (bottom - top) * (l - _log(lo))).toDouble();
+  }
+
+  static double _log(double v) => math.log(v > _minLogPrice ? v : _minLogPrice) / math.ln10;
 
   static List<SubPaneRect> _subPanes(PaneSplit split, List<double> weights, ChartDims dims) {
     final panes = <SubPaneRect>[];
@@ -289,15 +319,20 @@ class _Viewport {
   final int last;
 }
 
+/// 对数刻度下当作价格下限的极小正数。
+const double _minLogPrice = 1e-12;
+
 /// 一组数值在 [first]..[last] 内的 (min, max)；全为空时返回 null。
-({double min, double max})? valueRange(Iterable<List<double?>> lines, int first, int last) {
+/// [positiveOnly] 时跳过非正数（对数刻度画不出来）。
+({double min, double max})? valueRange(Iterable<List<double?>> lines, int first, int last,
+    {bool positiveOnly = false}) {
   var lo = double.infinity;
   var hi = double.negativeInfinity;
   for (final values in lines) {
     final end = math.min(last, values.length - 1);
     for (var i = first; i <= end; i++) {
       final v = values[i];
-      if (v == null || !v.isFinite) continue;
+      if (v == null || !v.isFinite || (positiveOnly && v <= 0)) continue;
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
@@ -318,32 +353,43 @@ class _Viewport {
 }
 
 /// 主图价格区间（含主指标线，避免裁切），返回已含 6% 上下留白的 (min, max)。
+/// [closeOnly] 时 K 线只按收盘价算（折线图、面积图）。
+/// [log] 时只看正数，留白是对数跨度的 6%（[extra] 要自己跳过非正数）。
 ({double min, double max}) _priceRange(
   List<Candle> candles,
   List<IndicatorSeries> mainSeries,
   int first,
   int last, [
   ({double min, double max})? Function(int first, int last)? extra,
+  bool closeOnly = false,
+  bool log = false,
 ]) {
   var lo = double.infinity;
   var hi = double.negativeInfinity;
   for (var i = first; i <= last; i++) {
-    lo = math.min(lo, candles[i].low);
-    hi = math.max(hi, candles[i].high);
+    final l = closeOnly ? candles[i].close : candles[i].low;
+    final h = closeOnly ? candles[i].close : candles[i].high;
+    if (log && l <= 0) {
+      if (h > 0) hi = math.max(hi, h);
+      continue;
+    }
+    lo = math.min(lo, l);
+    hi = math.max(hi, h);
   }
   final ind = valueRange([
     for (final s in mainSeries)
       for (final line in s.lines) line.values,
-  ], first, last);
+  ], first, last, positiveOnly: log);
   if (ind != null) {
     lo = math.min(lo, ind.min);
     hi = math.max(hi, ind.max);
   }
   final more = extra?.call(first, last);
   if (more != null) {
-    lo = math.min(lo, more.min);
+    if (!log || more.min > 0) lo = math.min(lo, more.min);
     hi = math.max(hi, more.max);
   }
+  if (log) return _logRange(lo, hi);
   if (!lo.isFinite || !hi.isFinite) {
     lo = 0;
     hi = 1;
@@ -351,4 +397,21 @@ class _Viewport {
   if (hi - lo < 1e-9) hi = lo + 1;
   final pad = (hi - lo) * 0.06;
   return (min: lo - pad, max: hi + pad);
+}
+
+/// 对数刻度的价格区间：没有正数时取 1..10；上下各留对数跨度的 6%。
+({double min, double max}) _logRange(double lo, double hi) {
+  if (!lo.isFinite || !hi.isFinite || lo <= 0) {
+    lo = 1;
+    hi = 10;
+  }
+  var a = math.log(lo) / math.ln10;
+  var b = math.log(hi) / math.ln10;
+  // 同一个价：上下各放 2%
+  if (b - a < 1e-9) {
+    a -= math.log(1.02) / math.ln10;
+    b += math.log(1.02) / math.ln10;
+  }
+  final pad = (b - a) * 0.06;
+  return (min: math.pow(10, a - pad).toDouble(), max: math.pow(10, b + pad).toDouble());
 }

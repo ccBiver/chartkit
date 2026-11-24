@@ -49,6 +49,7 @@ class ChartPaintConfig {
     required this.markText,
     this.drawing,
     this.scripts,
+    this.logScale = false,
   });
 
   final ChartTheme theme;
@@ -79,6 +80,9 @@ class ChartPaintConfig {
 
   /// 脚本图元；为空时不画（未传 `scriptOutputs`）。
   final ScriptPaintConfig? scripts;
+
+  /// 主图价格轴按对数刻度。
+  final bool logScale;
 }
 
 /// 每帧变化的数据来源（指标结果、动画进度），由组件的 State 实现。
@@ -153,11 +157,15 @@ class KLineChartPainter extends CustomPainter {
           ? source.subPaneWeights
           : [...source.subPaneWeights, ...source.scriptPaneWeights],
       mainSeries: source.mainSeries,
-      extraMainRange:
-          scripts.isEmpty ? null : (first, last) => scriptMainRange(scripts, first, last),
+      extraMainRange: scripts.isEmpty
+          ? null
+          : (first, last) =>
+              scriptMainRange(scripts, first, last, positiveOnly: config.logScale),
       measureText: config.text.measure,
       formatPrice: config.formatter.price,
       labelPad: 4 * config.unit,
+      closeOnly: config.mode.closeOnly,
+      logScale: config.logScale,
     );
   }
 
@@ -210,20 +218,28 @@ class KLineChartPainter extends CustomPainter {
 
     r.drawGrid();
     sp?.paintMainUnder();
-    if (config.mode == ChartMode.timeLine) {
-      r.drawTimeLine();
-    } else {
-      final barColors =
-          sp == null ? null : scriptBarColors(scripts, layout.firstIndex, layout.lastIndex);
-      if (barColors == null) {
-        r.drawCandles();
-      } else {
-        r.drawCandles(colorOf: barColors);
-      }
-      r.drawMainIndicators(source.mainSeries);
+    switch (config.mode) {
+      case ChartMode.timeLine:
+        r.drawTimeLine();
+      case ChartMode.line || ChartMode.area:
+        r.drawTimeLine(withFill: config.mode == ChartMode.area);
+        r.drawMainIndicators(source.mainSeries);
+      case ChartMode.candle || ChartMode.ohlc:
+        final barColors =
+            sp == null ? null : scriptBarColors(scripts, layout.firstIndex, layout.lastIndex);
+        if (config.mode == ChartMode.ohlc) {
+          r.drawOhlcBars(colorOf: barColors);
+        } else if (barColors == null) {
+          r.drawCandles();
+        } else {
+          r.drawCandles(colorOf: barColors);
+        }
+        r.drawMainIndicators(source.mainSeries);
     }
     sp?.paintMainOver();
-    if (config.mode != ChartMode.timeLine && config.showHighLow) r.drawHighLow();
+    if (config.showHighLow && !config.mode.closeOnly && config.mode != ChartMode.timeLine) {
+      r.drawHighLow();
+    }
     r.drawTradeMarks(config.tradeMarks);
     if (config.showVolume) r.drawVolume();
     r.drawSubPanes(source.subPaneIds, source.subSeries, focus);

@@ -1,7 +1,20 @@
 import 'package:flutter/widgets.dart';
 
-/// 蜡烛/折线模式。
-enum ChartMode { candle, timeLine }
+/// 图表类型。
+///
+/// [timeLine] 是分时：收盘价折线加填充，不画主图指标和最高最低价标注。
+/// [ohlc]（美国线）、[line]（折线图）、[area]（面积图）照常画主图指标；
+/// 折线图和面积图只看收盘价，价格区间也只按收盘价算。
+enum ChartMode {
+  candle,
+  timeLine,
+  ohlc,
+  line,
+  area;
+
+  /// 只画收盘价的类型（折线图、面积图）。
+  bool get closeOnly => this == line || this == area;
+}
 
 /// 涨跌配色方案。
 enum UpDownColor { greenUpRedDown, redUpGreenDown }

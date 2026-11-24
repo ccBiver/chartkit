@@ -5,6 +5,7 @@ export 'src/indicator/builtins.dart';
 export 'src/indicator/chart_registry.dart';
 export 'src/indicator/indicator.dart';
 export 'src/model/candle.dart';
+export 'src/model/combine.dart';
 export 'src/model/time_frame.dart';
 export 'src/chart/chart_formatter.dart';
 export 'src/chart/chart_mapper.dart';
@@ -14,6 +15,7 @@ export 'src/chart/k_line_chart_state.dart';
 export 'src/chart/sub_indicator_controller.dart';
 export 'src/chart/chart_painter.dart' show ChartOverlayPainter;
 export 'src/chart/k_line_chart.dart';
+export 'src/chart/replay_controller.dart' show ChartReplayController, ReplayPhase;
 export 'src/drawing/drawing.dart';
 export 'src/drawing/drawing_controller.dart';
 export 'src/drawing/drawing_geometry.dart'
