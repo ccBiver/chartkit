@@ -64,7 +64,7 @@ class Pixels {
       final est = <double>[];
       for (final (pv, cv, bv) in [(p.r, c.r, bg.r), (p.g, c.g, bg.g), (p.b, c.b, bg.b)]) {
         if ((cv - bv).abs() < 0.1) {
-          if ((pv - bv).abs() > 0.05) est.add(-1);
+          if ((pv - bv).abs() > (cv - bv).abs() + 0.05) est.add(-1);
           continue;
         }
         est.add((pv - bv) / (cv - bv));

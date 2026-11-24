@@ -196,7 +196,8 @@ class ChartRenderer {
     for (var r = 0; r <= rows; r++) {
       final y = l.mainTop + (l.mainBottom - l.mainTop) * r / rows;
       line(theme.grid, Offset(0, y), Offset(l.chartWidth, y));
-      final price = l.priceMax - (l.priceMax - l.priceMin) * r / rows;
+      // 对数刻度下网格仍等分，标的是那一格对应的价格
+      final price = l.logScale ? l.yToPrice(y) : l.priceMax - (l.priceMax - l.priceMin) * r / rows;
       // 最上面一档贴着画布上沿：基线下移到整行可见，避免被裁掉
       final baseline = math.max(y + text.scaledFontSize / 3, text.scaledFontSize);
       _rightAlignedText(formatter.price(price), baseline, theme.axisText);

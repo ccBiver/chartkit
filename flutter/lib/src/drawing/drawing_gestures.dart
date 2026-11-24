@@ -141,8 +141,11 @@ class DrawingGestures {
       next = moveHandle(origin, handle, p.fromScreen(_clampTo(p.rect, pos)));
     } else {
       final bars = ((pos.dx - _dragStart.dx) / p.candleWidth).round();
-      final priceDelta = p.yToPrice(pos.dy) - p.yToPrice(_dragStart.dy);
-      next = translateDrawing(origin, p.timeline, bars, priceDelta);
+      final from = p.yToPrice(_dragStart.dy), to = p.yToPrice(pos.dy);
+      // 对数刻度下整体按比例移动，形状在屏幕上不变
+      next = p.logScale && from > 0
+          ? translateDrawing(origin, p.timeline, bars, 0, priceFactor: to / from)
+          : translateDrawing(origin, p.timeline, bars, to - from);
     }
     _dragMoved = _dragMoved || next != origin;
     c.replaceDuringEdit(next);

@@ -132,11 +132,13 @@ class ScriptPaintConfig {
 }
 
 /// 主图价格区间要容下的脚本数值：画在主图上的可见曲线、面积、点和自绘 K 线（不含柱、水平线和对象）。
-/// 副图脚本里标了 `pane: "main"` 的序列和自绘 K 线也算。
-({double min, double max})? scriptMainRange(List<ScriptEntry> scripts, int first, int last) {
+/// 副图脚本里标了 `pane: "main"` 的序列和自绘 K 线也算。[positiveOnly] 时跳过非正数（对数刻度）。
+({double min, double max})? scriptMainRange(List<ScriptEntry> scripts, int first, int last,
+    {bool positiveOnly = false}) {
   var lo = double.infinity;
   var hi = double.negativeInfinity;
   void take(double v) {
+    if (positiveOnly && v <= 0) return;
     if (v < lo) lo = v;
     if (v > hi) hi = v;
   }
@@ -419,6 +421,7 @@ class _PaneGeom {
     required this.right,
     required this.min,
     required this.max,
+    this.log = false,
   });
 
   factory _PaneGeom.main(ChartLayout l) => _PaneGeom(
@@ -428,6 +431,7 @@ class _PaneGeom {
         right: l.chartWidth,
         min: l.priceMin,
         max: l.priceMax,
+        log: l.logScale,
       );
 
   final double top;
@@ -437,11 +441,14 @@ class _PaneGeom {
   final double min;
   final double max;
 
+  /// 按对数刻度（只有主图会是）。
+  final bool log;
+
   Rect get rect => Rect.fromLTRB(left, top, right, bottom);
 
-  Object get key => (top, bottom, min, max);
+  Object get key => (top, bottom, min, max, log);
 
-  double y(double v) => ChartLayout.valueToY(v, top, bottom, min, max);
+  double y(double v) => ChartLayout.priceToPixel(v, top, bottom, min, max, log: log);
 }
 
 /// 可见的本地下标范围（含右侧留白里的虚拟下标），两边各多一根，免得线在边缘断开。

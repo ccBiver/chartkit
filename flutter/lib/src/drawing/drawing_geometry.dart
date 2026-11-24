@@ -68,6 +68,7 @@ class DrawingProjection {
     required this.candleWidth,
     required this.priceMin,
     required this.priceMax,
+    this.logScale = false,
   });
 
   factory DrawingProjection.of(ChartLayout layout, DrawingTimeline timeline) => DrawingProjection(
@@ -77,6 +78,7 @@ class DrawingProjection {
         candleWidth: layout.candleWidth,
         priceMin: layout.priceMin,
         priceMax: layout.priceMax,
+        logScale: layout.logScale,
       );
 
   /// 主图矩形（蜡烛区，不含右轴、量图、副图）。
@@ -87,6 +89,9 @@ class DrawingProjection {
   final double priceMin;
   final double priceMax;
 
+  /// 主图价格轴按对数刻度。
+  final bool logScale;
+
   /// 小数索引 → 像素 X（整数索引落在蜡烛中心）。
   double indexToX(double index) => rect.right - (rightFloat - index + 0.5) * candleWidth;
 
@@ -94,10 +99,10 @@ class DrawingProjection {
   double xToIndex(double x) => rightFloat + 0.5 - (rect.right - x) / candleWidth;
 
   double priceToY(double price) =>
-      ChartLayout.valueToY(price, rect.top, rect.bottom, priceMin, priceMax);
+      ChartLayout.priceToPixel(price, rect.top, rect.bottom, priceMin, priceMax, log: logScale);
 
   double yToPrice(double y) =>
-      priceMax - (y - rect.top) / (rect.bottom - rect.top) * (priceMax - priceMin);
+      ChartLayout.pixelToPrice(y, rect.top, rect.bottom, priceMin, priceMax, log: logScale);
 
   double timeToX(int time) => indexToX(timeline.indexOf(time));
 
@@ -260,13 +265,14 @@ Drawing moveHandle(Drawing d, int handle, DrawingAnchor to) {
   return d.copyWith(anchors: anchors);
 }
 
-/// 整体平移：时间方向移 [bars] 根（按当前周期的 K 线），价格方向移 [priceDelta]。
-Drawing translateDrawing(Drawing d, DrawingTimeline timeline, int bars, double priceDelta) =>
+/// 整体平移：时间方向移 [bars] 根（按当前周期的 K 线），价格先乘 [priceFactor] 再加 [priceDelta]。
+Drawing translateDrawing(Drawing d, DrawingTimeline timeline, int bars, double priceDelta,
+        {double priceFactor = 1}) =>
     d.copyWith(anchors: [
       for (final a in d.anchors)
         DrawingAnchor(
           bars == 0 ? a.time : timeline.timeAt(timeline.indexOf(a.time) + bars),
-          a.price + priceDelta,
+          a.price * priceFactor + priceDelta,
         ),
     ]);
 

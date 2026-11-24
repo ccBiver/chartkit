@@ -85,6 +85,7 @@ class KLineChart extends StatefulWidget {
     this.drawingTheme = const DrawingTheme(),
     this.drawingLabels = const DrawingLabels(),
     this.scriptOutputs,
+    this.logScale = false,
   })  : resetAnimation = resetAnimation ?? entranceAnimation,
         assert(blankScrollRatio >= 0),
         assert(blankScrollWidth >= 0),
@@ -203,6 +204,10 @@ class KLineChart extends StatefulWidget {
   /// 服务端脚本引擎输出的图元。为空时不画，图表和原来完全一样。
   /// 主图脚本叠在 K 线上，副图脚本各占一个窗格（排在 [subIndicators] 之后）。见 `PRIMITIVES.md`。
   final ScriptOutputController? scriptOutputs;
+
+  /// 主图价格轴按对数刻度。价格换算、刻度、现价标签、十字光标读数、自动价格区间、
+  /// 画线和脚本图元都跟着换算；成交量和副图不受影响。非正数在对数刻度下画不出来，不计入价格区间。
+  final bool logScale;
 
   @override
   State<KLineChart> createState() => _KLineChartView();
@@ -730,6 +735,7 @@ class _KLineChartView extends State<KLineChart>
         markText: _markText!,
         drawing: _drawingConfig(),
         scripts: _scriptConfig(),
+        logScale: widget.logScale,
       ),
     );
     // 撑满可用空间：父级约束宽松（如放在 Column 里）时也不会塌缩
