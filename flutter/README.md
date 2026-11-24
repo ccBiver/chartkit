@@ -140,6 +140,15 @@ scripts.setJson('rsi', output); // 服务端脚本引擎的图元 JSON（SCHEMA 
 
 15 类图元、对齐规则、取值接口见 [PRIMITIVES.md](PRIMITIVES.md)。不传 `scriptOutputs` 时图表不变。
 
+### 图表类型、对数坐标、回放、多图、合成图
+
+```dart
+KLineChart(state: state, mode: ChartMode.ohlc, logScale: true, replay: ChartReplayController(source: state));
+final ratio = combineCandles(xauusd, xagusd, CombineOp.divide); // 合成图：两个品种按开盘时间对齐后运算
+```
+
+美国线、折线图、面积图，主图对数坐标，K 线回放控制器（控制条由宿主做），多图注意事项，合成图见 [CHART_TOOLS.md](CHART_TOOLS.md)。都默认关闭，不传时图表不变。
+
 ### 现价标签：倒计时与盘口贴纸
 
 ```dart
