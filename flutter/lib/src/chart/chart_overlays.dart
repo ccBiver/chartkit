@@ -5,6 +5,7 @@ import 'chart_renderer.dart';
 import 'chart_types.dart';
 import 'crosshair_panel.dart';
 import 'k_line_chart.dart';
+import 'replay_controller.dart';
 
 /// 主图指标读数图例（左上角）：每个主图指标占一行，行内是该指标的各条线。
 /// 无十字光标时显示最新根并带数字滚动；拖动十字光标时即时显示命中根。
@@ -20,17 +21,18 @@ class ChartLegend extends StatelessWidget {
         top: 3,
         right: 8,
         child: IgnorePointer(
-          child: ListenableBuilder(listenable: chart.state, builder: (context, _) => _rows()),
+          child: ListenableBuilder(listenable: shownState(chart), builder: (context, _) => _rows()),
         ),
       );
 
   Widget _rows() {
-    final candles = chart.state.candles;
+    final state = shownState(chart);
+    final candles = state.candles;
     final series = seriesOf();
     if (candles.isEmpty || series.isEmpty || chart.mode == ChartMode.timeLine) {
       return const SizedBox.shrink();
     }
-    final crosshair = chart.state.crosshairIndex;
+    final crosshair = state.crosshairIndex;
     final onCandle = crosshair >= 0 && crosshair < candles.length;
     final focus = onCandle ? crosshair : candles.length - 1;
     final theme = chart.theme;
@@ -76,9 +78,9 @@ class ChartCrosshairPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: chart.state,
+        listenable: shownState(chart),
         builder: (context, _) {
-          final state = chart.state;
+          final state = shownState(chart);
           final index = state.crosshairIndex;
           final visible = index >= 0 && index < state.candles.length;
           final fingerOnLeft = state.crosshairX >= 0 && state.crosshairX <= chartWidth / 2;
@@ -102,7 +104,7 @@ class ChartCrosshairPanel extends StatelessWidget {
       );
 
   List<CrosshairDetailRow> _rows(int index) {
-    final state = chart.state;
+    final state = shownState(chart);
     final candle = state.candles[index];
     final base = chart.crosshairDetail?.call(candle) ??
         defaultCrosshairRows(

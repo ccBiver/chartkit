@@ -117,6 +117,7 @@ class ScriptPaintConfig {
     required this.colors,
     required this.fontSize,
     required this.themeKey,
+    this.cutAtLast = false,
   });
 
   final ScriptOutputController controller;
@@ -129,6 +130,9 @@ class ScriptPaintConfig {
 
   /// 主题变化时让缓存的图层失效。
   final Object themeKey;
+
+  /// 回放中：只画到图上最后一根（游标）为止。图元对齐的是完整数据，回放的数据是它的前一段。
+  final bool cutAtLast;
 }
 
 /// 主图价格区间要容下的脚本数值：画在主图上的可见曲线、面积、点和自绘 K 线（不含柱、水平线和对象）。
@@ -216,7 +220,10 @@ class ScriptLayersPainter {
         layout.candleWidth,
         layout.rightFloat,
         config.themeKey,
+        _cutoff,
       );
+
+  int? get _cutoff => config.cutAtLast ? layout.itemCount - 1 : null;
 
   /// 主图背景色，画在 K 线下面。
   void paintMainUnder() {
@@ -322,7 +329,7 @@ class ScriptLayersPainter {
 
   /// 副图纵轴：[scriptSubRange] 的结果上下各留 5%。
   ({double min, double max}) _subRange(ResolvedScript r) {
-    final vis = _VisibleRange.of(layout);
+    final vis = _VisibleRange.of(layout, _cutoff);
     final raw = scriptSubRange(r, vis.first, vis.last);
     if (raw == null) return (min: 0, max: 1);
     if (raw.max - raw.min < 1e-9) return (min: raw.min - 1, max: raw.max + 1);
@@ -455,10 +462,14 @@ class _PaneGeom {
 class _VisibleRange {
   const _VisibleRange(this.first, this.last);
 
-  factory _VisibleRange.of(ChartLayout l) => _VisibleRange(
-        (l.rightFloat - l.chartWidth / l.candleWidth).floor() - 1,
-        l.rightFloat.ceil() + 1,
-      );
+  /// [cutoff] 非空时（回放）最多到这一根。
+  factory _VisibleRange.of(ChartLayout l, [int? cutoff]) {
+    final last = l.rightFloat.ceil() + 1;
+    return _VisibleRange(
+      (l.rightFloat - l.chartWidth / l.candleWidth).floor() - 1,
+      cutoff == null || cutoff > last ? last : cutoff,
+    );
+  }
 
   final int first;
   final int last;
@@ -471,7 +482,8 @@ class _ScriptPainter {
   _ScriptPainter(this.canvas, this.layout, this.pane, this.r, this.config, this.formatter,
       {required this.onMain})
       : o = r.output,
-        vis = _VisibleRange.of(layout);
+        cutoff = config.cutAtLast ? layout.itemCount - 1 : null,
+        vis = _VisibleRange.of(layout, config.cutAtLast ? layout.itemCount - 1 : null);
 
   /// 画在主图（true）还是脚本自己的副图（false）。
   final bool onMain;
@@ -487,6 +499,17 @@ class _ScriptPainter {
   final ScriptPaintConfig config;
   final ChartFormatter formatter;
   final _VisibleRange vis;
+
+  /// 回放的游标；非空时只画到它为止，跨过它的方框、线段从它右边裁掉。
+  final int? cutoff;
+
+  /// 图元的裁剪区：窗格，回放时右边到游标那根的右沿。
+  Rect get _clip {
+    final k = cutoff;
+    if (k == null) return pane.rect;
+    final r = pane.rect;
+    return Rect.fromLTRB(r.left, r.top, math.min(r.right, x(k) + cw / 2), r.bottom);
+  }
 
   final Paint _fill = Paint()..isAntiAlias = true;
   final Paint _stroke = Paint()
@@ -531,7 +554,7 @@ class _ScriptPainter {
   void paintBackground() {
     if (o.bg.isEmpty) return;
     canvas.save();
-    canvas.clipRect(pane.rect);
+    canvas.clipRect(_clip);
     for (var g = 0; g < o.bg.length; g++) {
       if (!_here(o.bg[g].mainPane)) continue;
       final runs = o.bg[g].runs;
@@ -554,7 +577,7 @@ class _ScriptPainter {
   /// 填充 → 水平线 → 自绘 K 线 → 序列 → 标记 → 成交点 → 方框 → 线段 → 标签 → 表格，最后是右轴最新值。
   void paintContent() {
     canvas.save();
-    canvas.clipRect(pane.rect);
+    canvas.clipRect(_clip);
     _fills();
     for (final h in o.hlines) {
       if (!h.visible || !_here(h.mainPane)) continue;
@@ -592,6 +615,13 @@ class _ScriptPainter {
     }
     for (var j = 0; j < o.labels.length; j++) {
       if (_here(o.labels[j].mainPane)) _label(o.labels[j], r.labelK[j]);
+    }
+    if (cutoff != null) {
+      // 表格按窗格定位，和时间无关：回放时不跟着游标裁
+      canvas
+        ..restore()
+        ..save()
+        ..clipRect(pane.rect);
     }
     for (final t in o.tables) {
       if (_here(t.mainPane)) _table(t);

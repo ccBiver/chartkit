@@ -25,6 +25,7 @@ import 'chart_text.dart';
 import 'chart_theme.dart';
 import 'chart_types.dart';
 import 'k_line_chart_state.dart';
+import 'replay_controller.dart';
 
 const Duration _exitDuration = Duration(milliseconds: 340);
 const Duration _enterDuration = Duration(milliseconds: 620);
@@ -86,6 +87,7 @@ class KLineChart extends StatefulWidget {
     this.drawingLabels = const DrawingLabels(),
     this.scriptOutputs,
     this.logScale = false,
+    this.replay,
   })  : resetAnimation = resetAnimation ?? entranceAnimation,
         assert(blankScrollRatio >= 0),
         assert(blankScrollWidth >= 0),
@@ -209,6 +211,11 @@ class KLineChart extends StatefulWidget {
   /// 画线和脚本图元都跟着换算；成交量和副图不受影响。非正数在对数刻度下画不出来，不计入价格区间。
   final bool logScale;
 
+  /// K 线回放。为空时没有回放。`replay.source` 必须就是 [state]。
+  /// 选起点时点图上任意位置即选中那一根；回放中图上只有起点到游标的 K 线，主图和副图指标按这些 K 线重算，
+  /// 脚本图元只画到游标为止（表格、水平线这类不带时间的照常画）。宿主推到 [state] 的实时行情不影响回放。
+  final ChartReplayController? replay;
+
   @override
   State<KLineChart> createState() => _KLineChartView();
 }
@@ -273,7 +280,11 @@ class _KLineChartView extends State<KLineChart>
   /// 全量更新后待应用初始留白（需要布局宽度，或当前处于构建阶段不能通知）。
   bool _pendingInitialBlank = false;
 
-  KLineChartState get _state => widget.state;
+  /// 图表实际画的状态：回放中是回放的截断数据，否则是 `widget.state`。
+  KLineChartState get _state => shownState(widget);
+
+  /// 当前监听着的状态（[_state] 变了要换监听）。
+  KLineChartState? _bound;
 
   // ───────────────────────── ChartFrameSource ─────────────────────────
 
@@ -315,7 +326,10 @@ class _KLineChartView extends State<KLineChart>
     final layout = _layout;
     final candles = _state.candles;
     final valid = layout != null && candles.isNotEmpty;
-    _state.updateMapper(valid ? KLineChartMapper(layout, candles) : null);
+    final mapper = valid ? KLineChartMapper(layout, candles) : null;
+    _state.updateMapper(mapper);
+    // 回放中宿主的状态也拿到这一帧的映射，宿主图层照常定位
+    if (!identical(_state, widget.state)) widget.state.updateMapper(mapper);
     _updateSelectionBounds();
     final scripts = widget.scriptOutputs;
     if (scripts != null) {
@@ -347,7 +361,10 @@ class _KLineChartView extends State<KLineChart>
     widget.scriptOutputs?.addListener(_onScriptsChanged);
     _syncCountdownTimer();
     _skeleton.addListener(_repaint.tick);
-    _state.addListener(_onStateChanged);
+    assert(widget.replay == null || identical(widget.replay!.source, widget.state),
+        'replay.source must be the chart state');
+    widget.replay?.addListener(_onReplayChanged);
+    _bindState();
     _syncSubPanes();
     _syncScriptPanes();
     _onStateChanged();
@@ -363,18 +380,13 @@ class _KLineChartView extends State<KLineChart>
   @override
   void didUpdateWidget(KLineChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.state, _state)) {
-      oldWidget.state.removeListener(_onStateChanged);
-      _state.addListener(_onStateChanged);
-      // 换了状态对象：版本号不可比，丢弃一切按旧状态缓存的东西
-      _resetVersion = -1;
-      _dataVersion = -1;
-      _loadMoreVersion = -1;
-      _mainInput = const [];
-      _subInput = const [];
-      _reportedCrosshair = _state.crosshairIndex;
-      _reportedPrice = null;
+    assert(widget.replay == null || identical(widget.replay!.source, widget.state),
+        'replay.source must be the chart state');
+    if (!identical(oldWidget.replay, widget.replay)) {
+      oldWidget.replay?.removeListener(_onReplayChanged);
+      widget.replay?.addListener(_onReplayChanged);
     }
+    _bindState();
     if (!identical(oldWidget.repaint, widget.repaint)) {
       oldWidget.repaint?.removeListener(_repaint.tick);
       widget.repaint?.addListener(_repaint.tick);
@@ -405,7 +417,8 @@ class _KLineChartView extends State<KLineChart>
 
   @override
   void dispose() {
-    _state.removeListener(_onStateChanged);
+    _bound?.removeListener(_onStateChanged);
+    widget.replay?.removeListener(_onReplayChanged);
     widget.repaint?.removeListener(_repaint.tick);
     widget.drawingController?.removeListener(_repaint.tick);
     widget.scriptOutputs?.removeListener(_onScriptsChanged);
@@ -427,6 +440,38 @@ class _KLineChartView extends State<KLineChart>
     _repaint.dispose();
     _paneTick.dispose();
     super.dispose();
+  }
+
+  /// 让监听跟上 [_state]：宿主换了状态对象，或进出回放（[replay]）。返回是否换了。
+  bool _bindState({bool replay = false}) {
+    final s = _state;
+    final old = _bound;
+    if (identical(s, old)) return false;
+    old?.removeListener(_onStateChanged);
+    s.addListener(_onStateChanged);
+    _bound = s;
+    if (old == null) return true;
+    // 换了状态对象：版本号不可比，丢弃一切按旧状态缓存的东西
+    _resetVersion = -1;
+    _dataVersion = -1;
+    _loadMoreVersion = -1;
+    _mainInput = const [];
+    _subInput = const [];
+    _reportedCrosshair = s.crosshairIndex;
+    _reportedPrice = null;
+    if (replay) {
+      // 进出回放不播入场动画；刚进回放时按需留出右侧空白
+      _resetVersion = s.resetVersion;
+      if (!identical(s, widget.state)) _applyInitialBlank();
+    }
+    return true;
+  }
+
+  /// 回放进出、换起点时换成要画的那份状态；回放中的每一根由那份状态自己通知重绘。
+  void _onReplayChanged() {
+    if (!mounted || !_bindState(replay: true)) return;
+    _onStateChanged();
+    setState(() {});
   }
 
   void _rebuildText() {
@@ -642,8 +687,10 @@ class _KLineChartView extends State<KLineChart>
     _scheduleAfterFrame();
   }
 
-  void _attachScriptCandles() =>
-      widget.scriptOutputs?.attachCandles(_state.candles, intervalMs: _state.timeFrame.millis);
+  /// 脚本图元总是对齐到宿主的完整数据；回放时按游标裁剪（见 [_scriptConfig]）。
+  /// 回放的数据是完整数据的前一段，两边同一根 K 线的下标相同。
+  void _attachScriptCandles() => widget.scriptOutputs
+      ?.attachCandles(widget.state.candles, intervalMs: widget.state.timeFrame.millis);
 
   /// 副图脚本的窗格跟着输出走：新设置的长出，移除的收缩完再删。替换同一个 id 时窗格不动。
   void _syncScriptPanes() {
@@ -701,6 +748,7 @@ class _KLineChartView extends State<KLineChart>
       ),
       fontSize: theme.dims.axisTextSize,
       themeKey: (theme, widget.upDownColor, scaler),
+      cutAtLast: !identical(_state, widget.state),
     );
   }
 
@@ -817,6 +865,7 @@ class _KLineChartView extends State<KLineChart>
           if (!d.onLongPressCancel()) _gestures.onLongPressEnd();
         },
         onTapUp: (e) {
+          if (_gestures.pickReplayStart(e.localPosition)) return;
           if (!d.onTapUp(e.localPosition)) _gestures.onTapUp(e);
         },
         child: child,
