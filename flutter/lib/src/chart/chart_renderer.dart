@@ -239,14 +239,14 @@ class ChartRenderer {
     canvas.drawPath(stroke, _stroke);
   }
 
-  /// 蜡烛（影线 + 实体）。
-  void drawCandles() {
+  /// 蜡烛（影线 + 实体）。[colorOf] 给某根返回颜色时用它代替涨跌色（脚本的 K 线改色）。
+  void drawCandles({Color? Function(int index)? colorOf}) {
     final l = layout;
     final bw = bodyWidth;
     for (var i = l.firstIndex; i <= revealLast; i++) {
       final c = candles[i];
       final x = l.centerX(i);
-      final color = c.isBullish ? up : down;
+      final color = colorOf?.call(i) ?? (c.isBullish ? up : down);
       final yOpen = l.priceToY(c.open);
       final yClose = l.priceToY(c.close);
       final top = math.min(yOpen, yClose);

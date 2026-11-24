@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:chartkit_flutter/chartkit_flutter.dart';
 import 'package:flutter/material.dart';
 
+import 'primitives_demo.dart';
+
 void main() => runApp(const ExampleApp());
 
 class ExampleApp extends StatelessWidget {
@@ -204,6 +206,14 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
                   _load();
                 }),
               _chip(_dark ? 'Light' : 'Dark', false, text, () => setState(() => _dark = !_dark)),
+              _chip(
+                '脚本图元',
+                false,
+                text,
+                () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute<void>(builder: (_) => const PrimitivesDemoPage())),
+              ),
             ]),
             Expanded(
               child: KLineChart(

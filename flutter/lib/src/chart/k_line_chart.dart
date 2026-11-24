@@ -13,6 +13,8 @@ import '../drawing/drawing_theme.dart';
 import '../indicator/indicator.dart';
 import '../indicator/indicator_engine.dart';
 import '../model/candle.dart';
+import '../script/script_controller.dart';
+import '../script/script_painter.dart';
 import 'chart_formatter.dart';
 import 'chart_gestures.dart';
 import 'chart_layout.dart';
@@ -82,6 +84,7 @@ class KLineChart extends StatefulWidget {
     this.drawingController,
     this.drawingTheme = const DrawingTheme(),
     this.drawingLabels = const DrawingLabels(),
+    this.scriptOutputs,
   })  : resetAnimation = resetAnimation ?? entranceAnimation,
         assert(blankScrollRatio >= 0),
         assert(blankScrollWidth >= 0),
@@ -197,6 +200,10 @@ class KLineChart extends StatefulWidget {
   /// 画线上的文字（头寸的入场/目标/止损、盈亏比、测量的根数单位）。
   final DrawingLabels drawingLabels;
 
+  /// 服务端脚本引擎输出的图元。为空时不画，图表和原来完全一样。
+  /// 主图脚本叠在 K 线上，副图脚本各占一个窗格（排在 [subIndicators] 之后）。见 `PRIMITIVES.md`。
+  final ScriptOutputController? scriptOutputs;
+
   @override
   State<KLineChart> createState() => _KLineChartView();
 }
@@ -237,6 +244,9 @@ class _KLineChartView extends State<KLineChart>
   final _Ticker _paneTick = _Ticker();
 
   List<_SubPane> _subs = const [];
+  List<(String, AnimationController)> _scriptPanes = const [];
+  final ScriptLayerCache _scriptCache = ScriptLayerCache();
+  ScriptTextCache? _scriptText;
   List<IndicatorSeries> _mainSeries = const [];
   List<IndicatorSeries> _subSeries = const [];
   List<Candle> _mainInput = const [];
@@ -271,6 +281,11 @@ class _KLineChartView extends State<KLineChart>
   @override
   List<double> get subPaneWeights => [for (final s in _subs) s.weight];
   @override
+  List<String> get scriptPaneIds => [for (final p in _scriptPanes) p.$1];
+  @override
+  List<double> get scriptPaneWeights =>
+      [for (final p in _scriptPanes) _curve.transform(p.$2.value)];
+  @override
   double get entrance => _entrance.value;
   @override
   double get skeletonPhase => -0.2 + 1.4 * _skeleton.value;
@@ -297,6 +312,11 @@ class _KLineChartView extends State<KLineChart>
     final valid = layout != null && candles.isNotEmpty;
     _state.updateMapper(valid ? KLineChartMapper(layout, candles) : null);
     _updateSelectionBounds();
+    final scripts = widget.scriptOutputs;
+    if (scripts != null) {
+      _scriptCache.retain(scripts.scriptIds.toSet());
+      scripts.deliverIssues();
+    }
     if (!valid) return;
     if (_pendingInitialBlank) {
       _pendingInitialBlank = false;
@@ -319,10 +339,12 @@ class _KLineChartView extends State<KLineChart>
     _entrance.addListener(_repaint.tick);
     widget.repaint?.addListener(_repaint.tick);
     widget.drawingController?.addListener(_repaint.tick);
+    widget.scriptOutputs?.addListener(_onScriptsChanged);
     _syncCountdownTimer();
     _skeleton.addListener(_repaint.tick);
     _state.addListener(_onStateChanged);
     _syncSubPanes();
+    _syncScriptPanes();
     _onStateChanged();
   }
 
@@ -356,6 +378,12 @@ class _KLineChartView extends State<KLineChart>
       oldWidget.drawingController?.removeListener(_repaint.tick);
       widget.drawingController?.addListener(_repaint.tick);
     }
+    if (!identical(oldWidget.scriptOutputs, widget.scriptOutputs)) {
+      oldWidget.scriptOutputs?.removeListener(_onScriptsChanged);
+      widget.scriptOutputs?.addListener(_onScriptsChanged);
+      _scriptCache.retain(const {});
+      _syncScriptPanes();
+    }
     _syncCountdownTimer();
     // 指标实例变了（如改了周期参数）：丢弃增量缓存，全量重算
     final mainChanged = !listEquals(oldWidget.mainIndicators, widget.mainIndicators);
@@ -375,6 +403,12 @@ class _KLineChartView extends State<KLineChart>
     _state.removeListener(_onStateChanged);
     widget.repaint?.removeListener(_repaint.tick);
     widget.drawingController?.removeListener(_repaint.tick);
+    widget.scriptOutputs?.removeListener(_onScriptsChanged);
+    for (final p in _scriptPanes) {
+      p.$2.dispose();
+    }
+    _scriptCache.dispose();
+    _scriptText?.dispose();
     _countdownTimer?.cancel();
     _gestures.dispose();
     _entrance.dispose();
@@ -397,6 +431,9 @@ class _KLineChartView extends State<KLineChart>
     _markText?.dispose();
     _drawingText?.dispose();
     _drawingText = null;
+    _scriptText?.dispose();
+    _scriptText = null;
+    _scriptCache.retain(const {});
     _text = ChartText(
       fontSize: widget.theme.dims.axisTextSize,
       textScaler: scaler,
@@ -408,6 +445,7 @@ class _KLineChartView extends State<KLineChart>
   // ───────────────────────── 数据与动画 ─────────────────────────
 
   void _onStateChanged() {
+    _attachScriptCandles();
     if (_dataVersion != _state.dataVersion) {
       _dataVersion = _state.dataVersion;
       _recomputeSeries();
@@ -590,6 +628,77 @@ class _KLineChartView extends State<KLineChart>
     _onSubPaneTick();
   }
 
+  // ───────────────────────── 脚本图元 ─────────────────────────
+
+  void _onScriptsChanged() {
+    _syncScriptPanes();
+    _attachScriptCandles();
+    _repaint.tick();
+    _scheduleAfterFrame();
+  }
+
+  void _attachScriptCandles() =>
+      widget.scriptOutputs?.attachCandles(_state.candles, intervalMs: _state.timeFrame.millis);
+
+  /// 副图脚本的窗格跟着输出走：新设置的长出，移除的收缩完再删。替换同一个 id 时窗格不动。
+  void _syncScriptPanes() {
+    final c = widget.scriptOutputs;
+    final wanted = c == null || !c.visible ? const <String>[] : c.subPaneIds;
+    final kept = [
+      for (final p in _scriptPanes)
+        if (wanted.contains(p.$1) || !p.$2.isDismissed) p,
+    ];
+    final added = [
+      for (final id in wanted)
+        if (kept.every((p) => p.$1 != id)) (id, _newSubController()),
+    ];
+    for (final p in _scriptPanes) {
+      if (!kept.contains(p)) p.$2.dispose();
+    }
+    _scriptPanes = [...kept, ...added];
+    for (final p in _scriptPanes) {
+      if (wanted.contains(p.$1)) {
+        p.$2.forward();
+      } else {
+        p.$2.reverse().then((_) => _removeScriptPane(p.$2));
+      }
+    }
+  }
+
+  void _removeScriptPane(AnimationController controller) {
+    if (!mounted || !controller.isDismissed) return;
+    final before = _scriptPanes.length;
+    _scriptPanes = [
+      for (final p in _scriptPanes)
+        if (!identical(p.$2, controller)) p,
+    ];
+    if (_scriptPanes.length == before) return;
+    controller.dispose();
+    _onSubPaneTick();
+  }
+
+  ScriptPaintConfig? _scriptConfig() {
+    final controller = widget.scriptOutputs;
+    if (controller == null) return null;
+    final theme = widget.theme;
+    final scaler = MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    final text = _scriptText ??= ScriptTextCache(fontFamily: theme.fontFamily, textScaler: scaler);
+    return ScriptPaintConfig(
+      controller: controller,
+      cache: _scriptCache,
+      text: text,
+      colors: ScriptColors(
+        buy: theme.upColor(widget.upDownColor),
+        sell: theme.downColor(widget.upDownColor),
+        axisText: theme.axisText,
+        grid: theme.grid,
+        labelText: theme.lastPriceText,
+      ),
+      fontSize: theme.dims.axisTextSize,
+      themeKey: (theme, widget.upDownColor, scaler),
+    );
+  }
+
   // ───────────────────────── 构建 ─────────────────────────
 
   @override
@@ -620,6 +729,7 @@ class _KLineChartView extends State<KLineChart>
         text: _text!,
         markText: _markText!,
         drawing: _drawingConfig(),
+        scripts: _scriptConfig(),
       ),
     );
     // 撑满可用空间：父级约束宽松（如放在 Column 里）时也不会塌缩
@@ -758,6 +868,8 @@ class _KLineChartView extends State<KLineChart>
         chartHeight: totalHeight - widget.theme.dims.bottomAxisHeight,
         dims: widget.theme.dims,
         showVolume: widget.showVolume,
-        subWeights: subPaneWeights,
+        subWeights: widget.scriptOutputs == null
+            ? subPaneWeights
+            : [...subPaneWeights, ...scriptPaneWeights],
       ).mainBottom;
 }

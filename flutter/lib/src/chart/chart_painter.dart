@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../drawing/drawing_geometry.dart';
 import '../drawing/drawing_painter.dart';
 import '../indicator/indicator.dart';
+import '../script/script_painter.dart';
 import 'chart_formatter.dart';
 import 'chart_layout.dart';
 import 'chart_mapper.dart';
@@ -47,6 +48,7 @@ class ChartPaintConfig {
     required this.text,
     required this.markText,
     this.drawing,
+    this.scripts,
   });
 
   final ChartTheme theme;
@@ -74,6 +76,9 @@ class ChartPaintConfig {
 
   /// 画线；为空时不画（未开启画线）。
   final DrawingPaintConfig? drawing;
+
+  /// 脚本图元；为空时不画（未传 `scriptOutputs`）。
+  final ScriptPaintConfig? scripts;
 }
 
 /// 每帧变化的数据来源（指标结果、动画进度），由组件的 State 实现。
@@ -87,6 +92,10 @@ abstract interface class ChartFrameSource {
 
   /// 各副图的动画权重（0..1）。
   List<double> get subPaneWeights;
+
+  /// 脚本副图的 id 和动画权重，窗格排在内置副图之后。
+  List<String> get scriptPaneIds;
+  List<double> get scriptPaneWeights;
 
   /// 入场动画进度（0..1）。
   double get entrance;
@@ -116,17 +125,18 @@ class KLineChartPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, Paint()..color = theme.background);
-    final layout = _layoutFor(size);
+    final scripts = config.scripts?.controller.resolved() ?? const <ScriptEntry>[];
+    final layout = _layoutFor(size, scripts);
     source.onFrameLayout(layout);
     if (layout != null) {
-      _paintChart(canvas, layout);
+      _paintChart(canvas, layout, scripts);
     } else if (state.candles.isEmpty && config.showSkeleton) {
       _paintSkeleton(canvas, size);
     }
     canvas.restore();
   }
 
-  ChartLayout? _layoutFor(Size size) {
+  ChartLayout? _layoutFor(Size size, List<ScriptEntry> scripts) {
     final candles = state.candles;
     if (candles.isEmpty) return null;
     if (size.width < _minChartSize.width || size.height < _minChartSize.height) return null;
@@ -139,8 +149,12 @@ class KLineChartPainter extends CustomPainter {
       showVolume: config.showVolume,
       blankScrollRatio: config.blankScrollRatio,
       blankScrollWidth: config.blankScrollWidth,
-      subWeights: source.subPaneWeights,
+      subWeights: config.scripts == null
+          ? source.subPaneWeights
+          : [...source.subPaneWeights, ...source.scriptPaneWeights],
       mainSeries: source.mainSeries,
+      extraMainRange:
+          scripts.isEmpty ? null : (first, last) => scriptMainRange(scripts, first, last),
       measureText: config.text.measure,
       formatPrice: config.formatter.price,
       labelPad: 4 * config.unit,
@@ -163,7 +177,7 @@ class KLineChartPainter extends CustomPainter {
     );
   }
 
-  void _paintChart(Canvas canvas, ChartLayout layout) {
+  void _paintChart(Canvas canvas, ChartLayout layout, List<ScriptEntry> scripts) {
     final candles = state.candles;
     final r = ChartRenderer(
       canvas: canvas,
@@ -182,17 +196,45 @@ class KLineChartPainter extends CustomPainter {
     // 读数聚焦索引：十字光标命中某根时取该根，否则取最新一根
     final focus = crosshair >= 0 && crosshair < candles.length ? crosshair : candles.length - 1;
 
+    final sc = config.scripts;
+    final sp = sc == null || scripts.isEmpty
+        ? null
+        : ScriptLayersPainter(
+            canvas: canvas,
+            layout: layout,
+            candles: candles,
+            config: sc,
+            formatter: config.formatter,
+            scripts: scripts,
+          );
+
     r.drawGrid();
+    sp?.paintMainUnder();
     if (config.mode == ChartMode.timeLine) {
       r.drawTimeLine();
     } else {
-      r.drawCandles();
+      final barColors =
+          sp == null ? null : scriptBarColors(scripts, layout.firstIndex, layout.lastIndex);
+      if (barColors == null) {
+        r.drawCandles();
+      } else {
+        r.drawCandles(colorOf: barColors);
+      }
       r.drawMainIndicators(source.mainSeries);
-      if (config.showHighLow) r.drawHighLow();
     }
+    sp?.paintMainOver();
+    if (config.mode != ChartMode.timeLine && config.showHighLow) r.drawHighLow();
     r.drawTradeMarks(config.tradeMarks);
     if (config.showVolume) r.drawVolume();
     r.drawSubPanes(source.subPaneIds, source.subSeries, focus);
+    if (sp != null) {
+      final builtIn = source.subPaneIds.length;
+      final panes = layout.subPanes;
+      sp.paintSubPanes(
+        builtIn < panes.length ? panes.sublist(builtIn) : const [],
+        source.scriptPaneIds,
+      );
+    }
     r.drawTimeAxis();
     final drawing = config.drawing;
     if (drawing != null) {
