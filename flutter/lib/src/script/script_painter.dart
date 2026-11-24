@@ -156,9 +156,10 @@ class ScriptPaintConfig {
     if (i1 < i0) continue;
     for (final s in o.series) {
       if (!s.visible || s.kind == ScriptSeriesKind.bar || !(whole || s.mainPane)) continue;
+      final skip = _dropsLoneValues(s);
       for (var i = i0; i <= i1; i++) {
         final v = s.values[i];
-        if (v.isFinite) take(v);
+        if (v.isFinite && !(skip && _lone(s.values, i))) take(v);
       }
     }
     for (final c in o.candles) {
@@ -171,6 +172,14 @@ class ScriptPaintConfig {
   }
   return lo.isFinite ? (min: lo, max: hi) : null;
 }
+
+/// 在空值处断开的曲线、面积（含阶梯线）：前后都是空值（或到头）的单个值没有线段可画（同 Pine 的 `linebr`），
+/// 画的时候本来就跳过（见 `_ScriptPainter._runs`），价格区间和副图纵轴也不算它。点、柱逐根画，不受影响。
+bool _dropsLoneValues(ScriptSeries s) =>
+    s.breakGaps && (s.kind == ScriptSeriesKind.line || s.kind == ScriptSeriesKind.area);
+
+bool _lone(Float64List v, int i) =>
+    (i == 0 || v[i - 1].isNaN) && (i == v.length - 1 || v[i + 1].isNaN);
 
 /// K 线改色：返回第 i 根的新颜色，没有改色时 null。后设置的脚本覆盖先设置的。
 Color? Function(int index)? scriptBarColors(List<ScriptEntry> scripts, int first, int last) {
@@ -368,10 +377,11 @@ class ScriptLayersPainter {
   final i1 = math.min(o.bars.count - 1, vis.last - from);
   for (final s in o.series) {
     if (!s.visible || s.mainPane) continue;
+    final skip = _dropsLoneValues(s);
     var any = false;
     for (var i = i0; i <= i1; i++) {
       final v = s.values[i];
-      if (v.isFinite) {
+      if (v.isFinite && !(skip && _lone(s.values, i))) {
         take(v);
         any = true;
       }
