@@ -5,6 +5,7 @@ export 'src/indicator/builtins.dart';
 export 'src/indicator/chart_registry.dart';
 export 'src/indicator/indicator.dart';
 export 'src/model/candle.dart';
+export 'src/model/combine.dart';
 export 'src/model/time_frame.dart';
 export 'src/chart/chart_formatter.dart';
 export 'src/chart/chart_mapper.dart';
