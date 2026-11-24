@@ -88,11 +88,15 @@ class ChartCrosshairPanel extends StatelessWidget {
           final mapper = state.mapper.value;
           final rightAxis = mapper == null ? 0.0 : mapper.size.width - mapper.mainRect.width;
           // 隐藏时也保持为定位子项，避免未定位的空组件影响外层 Stack 的尺寸
-          return Positioned(
-            top: 18 + chart.crosshairPanelMargin.top,
-            left: fingerOnLeft ? null : 8 + chart.crosshairPanelMargin.left,
-            right: fingerOnLeft ? 8 + rightAxis + chart.crosshairPanelMargin.right : null,
-            child: visible ? _panel(_rows(index)) : const SizedBox.shrink(),
+          return Positioned.fill(
+            child: CustomSingleChildLayout(
+              delegate: _PanelPosition(
+                top: 18 + chart.crosshairPanelMargin.top,
+                left: fingerOnLeft ? null : 8 + chart.crosshairPanelMargin.left,
+                right: fingerOnLeft ? 8 + rightAxis + chart.crosshairPanelMargin.right : null,
+              ),
+              child: visible ? _panel(_rows(index)) : const SizedBox.shrink(),
+            ),
           );
         },
       );
@@ -127,6 +131,29 @@ class ChartCrosshairPanel extends StatelessWidget {
     );
     return [...base, ...?chart.crosshairExtraRows?.call(candle), ...marks];
   }
+}
+
+/// 浮窗的位置：贴左（[left]）或贴右（[right]）；图太窄放不下时整体挪回图内，不被裁掉。
+class _PanelPosition extends SingleChildLayoutDelegate {
+  const _PanelPosition({required this.top, this.left, this.right});
+
+  final double top;
+  final double? left;
+  final double? right;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) => const BoxConstraints();
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final x = left ?? size.width - right! - childSize.width;
+    final maxX = size.width - childSize.width;
+    return Offset(maxX <= 0 ? 0 : x.clamp(0.0, maxX), top);
+  }
+
+  @override
+  bool shouldRelayout(_PanelPosition old) =>
+      old.top != top || old.left != left || old.right != right;
 }
 
 /// 钉在主图区域内的浮层：Logo 水印与左下角全屏按钮。[mainBottom] 为主图底边 y。
