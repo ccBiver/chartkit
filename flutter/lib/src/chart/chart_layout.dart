@@ -129,6 +129,7 @@ class ChartLayout {
     required String Function(double price) formatPrice,
     required double labelPad,
     ({double min, double max})? Function(int first, int last)? extraMainRange,
+    bool closeOnly = false,
   }) {
     assert(candles.isNotEmpty && candleWidth > 0);
     final last = candles.length - 1;
@@ -156,7 +157,8 @@ class ChartLayout {
     // 自适应右轴：先用最小留白粗算可见价格区间，量出最宽价格标签，
     // 把右轴撑到「最长价格 + 内边距」，蜡烛区不会被价格标签压住。
     final rough = viewport(math.max(1.0, size.width - dims.rightAxisWidth));
-    final roughRange = _priceRange(candles, mainSeries, rough.first, rough.last, extraMainRange);
+    final roughRange =
+        _priceRange(candles, mainSeries, rough.first, rough.last, extraMainRange, closeOnly);
     final widest = math.max(
       measureText(formatPrice(roughRange.max)),
       measureText(formatPrice(roughRange.min)),
@@ -172,7 +174,7 @@ class ChartLayout {
       subWeights: subWeights,
     );
     final vp = viewport(chartWidth);
-    final range = _priceRange(candles, mainSeries, vp.first, vp.last, extraMainRange);
+    final range = _priceRange(candles, mainSeries, vp.first, vp.last, extraMainRange, closeOnly);
 
     return ChartLayout._(
       size: size,
@@ -318,18 +320,20 @@ class _Viewport {
 }
 
 /// 主图价格区间（含主指标线，避免裁切），返回已含 6% 上下留白的 (min, max)。
+/// [closeOnly] 时 K 线只按收盘价算（折线图、面积图）。
 ({double min, double max}) _priceRange(
   List<Candle> candles,
   List<IndicatorSeries> mainSeries,
   int first,
   int last, [
   ({double min, double max})? Function(int first, int last)? extra,
+  bool closeOnly = false,
 ]) {
   var lo = double.infinity;
   var hi = double.negativeInfinity;
   for (var i = first; i <= last; i++) {
-    lo = math.min(lo, candles[i].low);
-    hi = math.max(hi, candles[i].high);
+    lo = math.min(lo, closeOnly ? candles[i].close : candles[i].low);
+    hi = math.max(hi, closeOnly ? candles[i].close : candles[i].high);
   }
   final ind = valueRange([
     for (final s in mainSeries)

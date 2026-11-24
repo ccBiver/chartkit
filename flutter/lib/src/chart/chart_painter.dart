@@ -158,6 +158,7 @@ class KLineChartPainter extends CustomPainter {
       measureText: config.text.measure,
       formatPrice: config.formatter.price,
       labelPad: 4 * config.unit,
+      closeOnly: config.mode.closeOnly,
     );
   }
 
@@ -210,20 +211,28 @@ class KLineChartPainter extends CustomPainter {
 
     r.drawGrid();
     sp?.paintMainUnder();
-    if (config.mode == ChartMode.timeLine) {
-      r.drawTimeLine();
-    } else {
-      final barColors =
-          sp == null ? null : scriptBarColors(scripts, layout.firstIndex, layout.lastIndex);
-      if (barColors == null) {
-        r.drawCandles();
-      } else {
-        r.drawCandles(colorOf: barColors);
-      }
-      r.drawMainIndicators(source.mainSeries);
+    switch (config.mode) {
+      case ChartMode.timeLine:
+        r.drawTimeLine();
+      case ChartMode.line || ChartMode.area:
+        r.drawTimeLine(withFill: config.mode == ChartMode.area);
+        r.drawMainIndicators(source.mainSeries);
+      case ChartMode.candle || ChartMode.ohlc:
+        final barColors =
+            sp == null ? null : scriptBarColors(scripts, layout.firstIndex, layout.lastIndex);
+        if (config.mode == ChartMode.ohlc) {
+          r.drawOhlcBars(colorOf: barColors);
+        } else if (barColors == null) {
+          r.drawCandles();
+        } else {
+          r.drawCandles(colorOf: barColors);
+        }
+        r.drawMainIndicators(source.mainSeries);
     }
     sp?.paintMainOver();
-    if (config.mode != ChartMode.timeLine && config.showHighLow) r.drawHighLow();
+    if (config.showHighLow && !config.mode.closeOnly && config.mode != ChartMode.timeLine) {
+      r.drawHighLow();
+    }
     r.drawTradeMarks(config.tradeMarks);
     if (config.showVolume) r.drawVolume();
     r.drawSubPanes(source.subPaneIds, source.subSeries, focus);
