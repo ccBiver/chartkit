@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import '../drawing/drawing_geometry.dart';
+import '../drawing/drawing_painter.dart';
 import '../indicator/indicator.dart';
 import 'chart_formatter.dart';
 import 'chart_layout.dart';
@@ -44,6 +46,7 @@ class ChartPaintConfig {
     required this.unit,
     required this.text,
     required this.markText,
+    this.drawing,
   });
 
   final ChartTheme theme;
@@ -68,6 +71,9 @@ class ChartPaintConfig {
   final double unit;
   final ChartText text;
   final ChartText markText;
+
+  /// 画线；为空时不画（未开启画线）。
+  final DrawingPaintConfig? drawing;
 }
 
 /// 每帧变化的数据来源（指标结果、动画进度），由组件的 State 实现。
@@ -188,6 +194,17 @@ class KLineChartPainter extends CustomPainter {
     if (config.showVolume) r.drawVolume();
     r.drawSubPanes(source.subPaneIds, source.subSeries, focus);
     r.drawTimeAxis();
+    final drawing = config.drawing;
+    if (drawing != null) {
+      DrawingPainter(
+        canvas: canvas,
+        projection: DrawingProjection.of(layout, DrawingTimeline(candles, state.timeFrame.millis)),
+        colors: drawing.colors,
+        labels: drawing.labels,
+        text: drawing.text,
+        formatPrice: config.formatter.price,
+      ).paintAll(drawing.controller);
+    }
     config.overlayPainter?.call(canvas, layout.size, KLineChartMapper(layout, candles));
     // 现价线/标签画在宿主图层之上：挂单线、成交标记不会盖住现价
     final now = DateTime.now().millisecondsSinceEpoch;

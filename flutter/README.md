@@ -120,6 +120,16 @@ ValueListenableBuilder(
 主题里与此相关的颜色：`crosshairVertical` / `crosshairVerticalWidth`（竖线单独配色，给宽度则画成半透明竖带）、
 `lastPriceText`（现价标签文字色）、`highLowText`。
 
+### 画线
+
+```dart
+final drawings = DrawingController(style: const DrawingStyle(color: Color(0xFF3B82F6)));
+// KLineChart(drawingController: drawings)
+drawings.tool = DrawingTool.trendLine; // 进入新建，单击落点
+```
+
+12 个画线工具、手势、保存恢复见 [DRAWING.md](DRAWING.md)。不传 `drawingController` 时图表不变。
+
 ### 现价标签：倒计时与盘口贴纸
 
 ```dart

@@ -5,6 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../drawing/drawing_controller.dart';
+import '../drawing/drawing_geometry.dart';
+import '../drawing/drawing_gestures.dart';
+import '../drawing/drawing_painter.dart';
+import '../drawing/drawing_theme.dart';
 import '../indicator/indicator.dart';
 import '../indicator/indicator_engine.dart';
 import '../model/candle.dart';
@@ -74,6 +79,9 @@ class KLineChart extends StatefulWidget {
     this.onLoadMore,
     this.onCrosshairChange,
     this.onTradeMarkTap,
+    this.drawingController,
+    this.drawingTheme = const DrawingTheme(),
+    this.drawingLabels = const DrawingLabels(),
   })  : resetAnimation = resetAnimation ?? entranceAnimation,
         assert(blankScrollRatio >= 0),
         assert(blankScrollWidth >= 0),
@@ -179,6 +187,16 @@ class KLineChart extends StatefulWidget {
   final ValueChanged<Candle?>? onCrosshairChange;
   final ValueChanged<TradeMark>? onTradeMarkTap;
 
+  /// 画线。为空时不开启画线，图表的界面和手势与原来完全一样。
+  /// 画线画在主图里，在 K 线之上、[overlayPainter] 和十字光标之下。手势分工见 `DrawingGestures`。
+  final DrawingController? drawingController;
+
+  /// 画线的公共配色（盈亏区、端点填充、色块文字）；为空的项取 [theme]。
+  final DrawingTheme drawingTheme;
+
+  /// 画线上的文字（头寸的入场/目标/止损、盈亏比、测量的根数单位）。
+  final DrawingLabels drawingLabels;
+
   @override
   State<KLineChart> createState() => _KLineChartView();
 }
@@ -206,6 +224,11 @@ class _KLineChartView extends State<KLineChart>
       AnimationController(vsync: this, duration: _skeletonDuration);
   late final ChartGestures _gestures =
       ChartGestures(vsync: this, widgetOf: () => widget, layoutOf: () => _layout);
+  late final DrawingGestures _drawingGestures = DrawingGestures(
+    controllerOf: () => widget.drawingController,
+    projectionOf: _drawingProjection,
+    clearCrosshair: _gestures.clearCrosshair,
+  );
 
   /// 触发画布重绘（数据、视口、任一动画变化）。
   final _Ticker _repaint = _Ticker();
@@ -220,6 +243,7 @@ class _KLineChartView extends State<KLineChart>
   List<Candle> _subInput = const [];
   ChartText? _text;
   ChartText? _markText;
+  ChartText? _drawingText;
   ChartLayout? _layout;
   double _unit = 1;
   int _dataVersion = -1;
@@ -272,6 +296,7 @@ class _KLineChartView extends State<KLineChart>
     final candles = _state.candles;
     final valid = layout != null && candles.isNotEmpty;
     _state.updateMapper(valid ? KLineChartMapper(layout, candles) : null);
+    _updateSelectionBounds();
     if (!valid) return;
     if (_pendingInitialBlank) {
       _pendingInitialBlank = false;
@@ -293,6 +318,7 @@ class _KLineChartView extends State<KLineChart>
     super.initState();
     _entrance.addListener(_repaint.tick);
     widget.repaint?.addListener(_repaint.tick);
+    widget.drawingController?.addListener(_repaint.tick);
     _syncCountdownTimer();
     _skeleton.addListener(_repaint.tick);
     _state.addListener(_onStateChanged);
@@ -326,6 +352,10 @@ class _KLineChartView extends State<KLineChart>
       oldWidget.repaint?.removeListener(_repaint.tick);
       widget.repaint?.addListener(_repaint.tick);
     }
+    if (!identical(oldWidget.drawingController, widget.drawingController)) {
+      oldWidget.drawingController?.removeListener(_repaint.tick);
+      widget.drawingController?.addListener(_repaint.tick);
+    }
     _syncCountdownTimer();
     // 指标实例变了（如改了周期参数）：丢弃增量缓存，全量重算
     final mainChanged = !listEquals(oldWidget.mainIndicators, widget.mainIndicators);
@@ -344,6 +374,7 @@ class _KLineChartView extends State<KLineChart>
   void dispose() {
     _state.removeListener(_onStateChanged);
     widget.repaint?.removeListener(_repaint.tick);
+    widget.drawingController?.removeListener(_repaint.tick);
     _countdownTimer?.cancel();
     _gestures.dispose();
     _entrance.dispose();
@@ -353,6 +384,7 @@ class _KLineChartView extends State<KLineChart>
     }
     _text?.dispose();
     _markText?.dispose();
+    _drawingText?.dispose();
     _repaint.dispose();
     _paneTick.dispose();
     super.dispose();
@@ -363,6 +395,8 @@ class _KLineChartView extends State<KLineChart>
     final family = widget.theme.fontFamily;
     _text?.dispose();
     _markText?.dispose();
+    _drawingText?.dispose();
+    _drawingText = null;
     _text = ChartText(
       fontSize: widget.theme.dims.axisTextSize,
       textScaler: scaler,
@@ -585,6 +619,7 @@ class _KLineChartView extends State<KLineChart>
         unit: _unit,
         text: _text!,
         markText: _markText!,
+        drawing: _drawingConfig(),
       ),
     );
     // 撑满可用空间：父级约束宽松（如放在 Column 里）时也不会塌缩
@@ -608,7 +643,18 @@ class _KLineChartView extends State<KLineChart>
         ],
       );
 
-  Widget _buildCanvas(KLineChartPainter painter) => GestureDetector(
+  Widget _buildCanvas(KLineChartPainter painter) {
+    // 切周期/首屏：整图随入场值淡入淡出。无数据时强制不透明，否则骨架屏会被一起淡没
+    final child = ListenableBuilder(
+      listenable: Listenable.merge([_entrance, _state]),
+      builder: (context, child) => Opacity(
+        opacity: _state.candles.isEmpty ? 1 : _entrance.value.clamp(0.0, 1.0),
+        child: child,
+      ),
+      child: RepaintBoundary(child: CustomPaint(painter: painter, size: Size.infinite)),
+    );
+    if (widget.drawingController == null) {
+      return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onHorizontalDragStart: _gestures.onDragStart,
         onHorizontalDragUpdate: _gestures.onDragUpdate,
@@ -620,16 +666,92 @@ class _KLineChartView extends State<KLineChart>
         onLongPressEnd: (_) => _gestures.onLongPressEnd(),
         onLongPressCancel: _gestures.onLongPressEnd,
         onTapUp: _gestures.onTapUp,
-        // 切周期/首屏：整图随入场值淡入淡出。无数据时强制不透明，否则骨架屏会被一起淡没
-        child: ListenableBuilder(
-          listenable: Listenable.merge([_entrance, _state]),
-          builder: (context, child) => Opacity(
-            opacity: _state.candles.isEmpty ? 1 : _entrance.value.clamp(0.0, 1.0),
-            child: child,
-          ),
-          child: RepaintBoundary(child: CustomPaint(painter: painter, size: Size.infinite)),
-        ),
+        child: child,
       );
+    }
+    // 开启画线：点击、长按先问画线要不要；拖动选中画线由外层识别器在按下时直接接手
+    final d = _drawingGestures;
+    return RawGestureDetector(
+      gestures: {
+        DrawingDragRecognizer: GestureRecognizerFactoryWithHandlers<DrawingDragRecognizer>(
+          () => DrawingDragRecognizer(debugOwner: this),
+          (r) => r
+            ..canStart = d.canDrag
+            ..onUpdate = d.onDragUpdate
+            ..onEnd = d.onDragEnd,
+        ),
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: _gestures.onDragStart,
+        onHorizontalDragUpdate: _gestures.onDragUpdate,
+        onHorizontalDragEnd: _gestures.onDragEnd,
+        onScaleStart: _gestures.onScaleStart,
+        onScaleUpdate: _gestures.onScaleUpdate,
+        onLongPressStart: (e) {
+          if (!d.onLongPressStart(e.localPosition)) _gestures.onLongPressStart(e);
+        },
+        onLongPressMoveUpdate: (e) {
+          if (!d.onLongPressMove(e.localPosition)) _gestures.onLongPressMove(e);
+        },
+        onLongPressEnd: (_) {
+          if (!d.onLongPressEnd()) _gestures.onLongPressEnd();
+        },
+        onLongPressCancel: () {
+          if (!d.onLongPressCancel()) _gestures.onLongPressEnd();
+        },
+        onTapUp: (e) {
+          if (!d.onTapUp(e.localPosition)) _gestures.onTapUp(e);
+        },
+        child: child,
+      ),
+    );
+  }
+
+  // ───────────────────────── 画线 ─────────────────────────
+
+  DrawingPaintConfig? _drawingConfig() {
+    final controller = widget.drawingController;
+    if (controller == null) return null;
+    final theme = widget.theme;
+    final dt = widget.drawingTheme;
+    final text = _drawingText ??= ChartText(
+      fontSize: theme.dims.axisTextSize,
+      textScaler: MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+      fontFamily: theme.fontFamily,
+      cacheSize: 64,
+    );
+    return DrawingPaintConfig(
+      controller: controller,
+      colors: DrawingColors(
+        profit: dt.profit ?? theme.upColor(widget.upDownColor),
+        loss: dt.loss ?? theme.downColor(widget.upDownColor),
+        handleFill: dt.handleFill ?? theme.background,
+        labelText: dt.labelText ?? theme.lastPriceText,
+      ),
+      labels: widget.drawingLabels,
+      text: text,
+    );
+  }
+
+  /// 按最近一帧的布局做画线坐标换算；布局和数据对不上（刚换了数据、还没重绘）时为 null。
+  DrawingProjection? _drawingProjection() {
+    final layout = _layout;
+    final candles = _state.candles;
+    if (layout == null || candles.isEmpty || layout.itemCount != candles.length) return null;
+    return DrawingProjection.of(layout, DrawingTimeline(candles, _state.timeFrame.millis));
+  }
+
+  void _updateSelectionBounds() {
+    final controller = widget.drawingController;
+    if (controller == null) return;
+    final selected = controller.visible ? controller.selected : null;
+    final p = selected == null ? null : _drawingProjection();
+    if (selected == null || p == null) return controller.updateSelectionBounds(null);
+    final bounds = shapeOf(selected, p).bounds;
+    final visible = bounds.inflate(drawingHandleRadius).intersect(p.rect);
+    controller.updateSelectionBounds(visible.isEmpty ? null : visible);
+  }
 
   /// 主图底边 y：与渲染层同一套公式（含副图动画权重），浮层随主图平滑移动。
   double _mainBottom(double totalHeight) => PaneSplit.compute(
