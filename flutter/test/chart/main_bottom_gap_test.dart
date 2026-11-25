@@ -2,7 +2,10 @@
 // 手势不归图表，以及「总高加上空白 = 原来的图 + 中间插一段空白」。
 
 import 'package:chartkit_flutter/chartkit_flutter.dart';
+import 'dart:math' as math;
+
 import 'package:chartkit_flutter/src/chart/chart_layout.dart';
+import 'package:chartkit_flutter/src/drawing/drawing_geometry.dart' show DrawingProjection;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,6 +32,8 @@ ChartLayout _layout({
   double height = 500,
   bool volume = true,
   List<double> subs = const [1, 1],
+  double inset = 0,
+  bool log = false,
 }) =>
     ChartLayout.compute(
       size: Size(400, height),
@@ -44,6 +49,8 @@ ChartLayout _layout({
       formatPrice: (v) => v.toStringAsFixed(2),
       labelPad: 4,
       mainBottomGap: gap,
+      mainContentInset: inset,
+      logScale: log,
     );
 
 void main() {
@@ -102,6 +109,71 @@ void main() {
     });
   });
 
+  group('价格区和换算不含空白', () {
+    final candles = _data(200);
+
+    test('priceToY / yToPrice：总高加上空白后同一价格位置不变，价格区下沿是 mainRect.bottom，空白在价格区外', () {
+      final a = _layout(height: 500);
+      final b = _layout(height: 500 + _gap, gap: _gap);
+      expect(b.priceMin, a.priceMin);
+      expect(b.priceMax, a.priceMax);
+      for (final p in [a.priceMin, (a.priceMin + a.priceMax) / 2, a.priceMax, a.priceMin - 10]) {
+        expect(b.priceToY(p), closeTo(a.priceToY(p), 1e-9), reason: '$p');
+        expect(b.yToPrice(b.priceToY(p)), closeTo(p, 1e-9));
+      }
+      expect(b.priceToY(b.priceMax), closeTo(b.mainContentTop, 1e-9));
+      expect(b.priceToY(b.priceMin), closeTo(b.mainRect.bottom, 1e-9));
+      expect(b.mainRect.bottom, b.mainBottomGapRect.top);
+      expect(b.mainRect.contains(b.mainBottomGapRect.center), isFalse);
+      // 空白里的点换算出的价格都低于价格区下沿：价格区没有延伸进空白
+      expect(b.yToPrice(b.mainBottomGapRect.center.dy), lessThan(b.priceMin));
+      expect(b.yToPrice(b.mainBottomGapRect.bottom), lessThan(b.priceMin));
+    });
+
+    test('总高不变时主图让出空白：价格区下沿就是空白上沿，比例尺按缩短后的主图算', () {
+      final b = _layout(height: 500, gap: _gap);
+      expect(b.priceToY(b.priceMin), closeTo(b.mainBottomGapRect.top, 1e-9));
+      expect(b.priceToY(b.priceMin) - b.priceToY(b.priceMax),
+          closeTo(b.mainRect.height - b.mainContentTop, 1e-9));
+    });
+
+    test('画线的换算：DrawingProjection 的矩形就是 mainRect，锚点和像素互换与图表一致，和不留空时同一像素', () {
+      final a = _layout(height: 500);
+      final b = _layout(height: 500 + _gap, gap: _gap);
+      final timeline = DrawingTimeline(candles, 60000);
+      final pa = DrawingProjection.of(a, timeline);
+      final pb = DrawingProjection.of(b, timeline);
+      expect(pb.rect, b.mainRect);
+      expect(pb.rect.bottom, b.mainBottomGapRect.top);
+      expect(pb.priceTop, b.mainContentTop);
+      for (final price in [b.priceMin, (b.priceMin + b.priceMax) / 2, b.priceMax]) {
+        expect(pb.priceToY(price), closeTo(b.priceToY(price), 1e-9));
+      }
+      expect(pb.yToPrice(pb.rect.bottom), closeTo(b.priceMin, 1e-9));
+      final anchor = DrawingAnchor(candles[150].time, (b.priceMin + b.priceMax) / 2);
+      final screen = pb.toScreen(anchor);
+      expect(screen.dx, closeTo(pa.toScreen(anchor).dx, 1e-9));
+      expect(screen.dy, closeTo(pa.toScreen(anchor).dy, 1e-9));
+      final back = pb.fromScreen(screen);
+      expect(back.time, anchor.time);
+      expect(back.price, closeTo(anchor.price, 1e-9));
+    });
+
+    test('和图例留位、对数坐标同时开：价格区就是 [mainContentTop, mainRect.bottom]，空白在它下面', () {
+      final b = _layout(height: 500 + _gap, gap: _gap, inset: 18, log: true);
+      expect(b.mainContentTop, 18);
+      expect(b.priceToY(b.priceMax), closeTo(18, 1e-9));
+      expect(b.priceToY(b.priceMin), closeTo(b.mainRect.bottom, 1e-9));
+      // 对数刻度：上下沿价格的几何平均落在两者正中
+      final mid = math.sqrt(b.priceMin * b.priceMax);
+      expect(b.priceToY(mid), closeTo((18 + b.mainRect.bottom) / 2, 1e-9));
+      expect(b.mainBottomGapRect.top, b.mainRect.bottom);
+      expect(b.yToPrice(b.mainBottomGapRect.center.dy), lessThan(b.priceMin));
+      final p = DrawingProjection.of(b, DrawingTimeline(candles, 60000));
+      expect(p.priceToY(mid), closeTo(b.priceToY(mid), 1e-9));
+    });
+  });
+
   group('组件', () {
     final candles = loadKlines();
     late KLineChartState state;
@@ -121,17 +193,108 @@ void main() {
       state.dispose();
     });
 
-    KLineChart chart({double gap = 0, ValueChanged<double?>? onPrice}) => KLineChart(
+    KLineChart chart({double gap = 0, ValueChanged<double?>? onPrice, DrawingController? drawings}) =>
+        KLineChart(
           state: state,
           entranceAnimation: false,
           mainIndicators: [Ma()],
           subIndicators: [Rsi()],
           scriptOutputs: scripts,
+          drawingController: drawings,
           mainBottomGap: gap,
           crosshairMode: CrosshairMode.free,
           orderbookProvider: () => const ChartOrderbook(bid: 3500, ask: 3501),
           onCrosshairPriceChange: onPrice,
         );
+
+    /// 「总高 600、不留空」和「总高 600 + 空白、留空」两张图：主图下沿上下各 12 像素以外，
+    /// 主图部分逐像素相同、下沿以下整体下移空白的高度后逐像素相同。返回不同的像素数。
+    Future<int> shiftedDiff(WidgetTester tester, {DrawingController? drawings}) async {
+      await pumpChart(tester, state, chart(drawings: drawings), size: const Size(400, 600));
+      final a = await capture(tester);
+      final ma = state.mapper.value!;
+      await pumpChart(tester, state, chart(gap: _gap, drawings: drawings),
+          size: const Size(400, 600 + _gap));
+      final b = await capture(tester);
+      expect(state.mapper.value!.mainRect, ma.mainRect);
+      final r = a.ratio;
+      final cut = (ma.mainRect.bottom * r).round();
+      final shift = (_gap * r).round();
+      final skip = (12 * r).round();
+      var diff = 0;
+      for (var y = 0; y < a.height; y++) {
+        if ((y - cut).abs() < skip) continue;
+        final yb = y < cut ? y : y + shift;
+        for (var x = 0; x < a.width; x++) {
+          if (a.bytes.getUint32((y * a.width + x) * 4) != b.bytes.getUint32((yb * b.width + x) * 4)) {
+            diff++;
+          }
+        }
+      }
+      return diff;
+    }
+
+    testWidgets('画线、主图脚本、副图脚本全开：总高加上空白后逐像素和原来一样（换算都没把空白算进去）', (tester) async {
+      scripts.setJson('boll', sampleJson('boll'));
+      scripts.setJson('smc', sampleJson('smc'));
+      final drawings = DrawingController(style: const DrawingStyle(color: Color(0xFF3B82F6)));
+      addTearDown(drawings.dispose);
+      drawings
+        ..add(Drawing(
+          id: 't',
+          tool: DrawingTool.trendLine,
+          anchors: [
+            DrawingAnchor(candles[930].time, candles[930].low),
+            DrawingAnchor(candles[985].time, candles[985].high)
+          ],
+          style: const DrawingStyle(color: Color(0xFF3B82F6), width: 2),
+        ))
+        ..add(Drawing(
+          id: 'h',
+          tool: DrawingTool.horizontalLine,
+          anchors: [DrawingAnchor(candles[960].time, candles[960].close)],
+          style: const DrawingStyle(color: Color(0xFFF59E0B)),
+        ))
+        ..add(Drawing(
+          id: 'f',
+          tool: DrawingTool.fibRetracement,
+          anchors: [
+            DrawingAnchor(candles[945].time, candles[945].low),
+            DrawingAnchor(candles[975].time, candles[975].high)
+          ],
+          style: const DrawingStyle(color: Color(0xFF8B5CF6)),
+        ));
+      expect(await shiftedDiff(tester, drawings: drawings), 0);
+    });
+
+    testWidgets('十字光标命中：主图里给的价格和不留空时一样；空白下面的副图照常出十字光标、不给价格', (tester) async {
+      Future<(double?, int)> press(double gap, double y) async {
+        final prices = <double?>[];
+        await pumpChart(tester, state, chart(gap: gap, onPrice: prices.add),
+            size: Size(400, 600 + gap));
+        state.clearCrosshair();
+        await tester.pump();
+        await tester.longPressAt(tester.getTopLeft(find.byKey(shotKey)) + Offset(200, y));
+        await tester.pump();
+        return (prices.isEmpty ? null : prices.last, state.crosshairIndex);
+      }
+
+      await pumpChart(tester, state, chart(), size: const Size(400, 600));
+      final bottom = state.mapper.value!.mainRect.bottom;
+      final (pa, ia) = await press(0, bottom - 20);
+      final (pb, ib) = await press(_gap, bottom - 20);
+      expect(pa, isNotNull);
+      expect(pb, closeTo(pa!, 1e-9));
+      expect(ib, ia);
+      // 第一块副图（成交量下面的 RSI）里：不留空时在 y，留空后在 y + 空白
+      final inSubA = bottom + 120;
+      final (qa, ja) = await press(0, inSubA);
+      final (qb, jb) = await press(_gap, inSubA + _gap);
+      expect(ja, greaterThanOrEqualTo(0));
+      expect(jb, ja);
+      expect(qa, isNull);
+      expect(qb, isNull);
+    });
 
     testWidgets('总高加上空白后，主图下沿附近以外的画面和原来逐像素一样（空白以下整体下移）', (tester) async {
       await pumpChart(tester, state, chart(), size: const Size(400, 600));
@@ -254,7 +417,7 @@ void main() {
       expect(taps, 1, reason: '主图里的点击归图表');
     });
 
-    testWidgets('和回放、对数坐标、图例留位同时打开', (tester) async {
+    testWidgets('和回放、对数坐标、图例留位同时打开：图例下沿、主图下沿、空白三条边界数值对得上且不重叠', (tester) async {
       final replay = ChartReplayController(source: state);
       addTearDown(replay.dispose);
       await pumpChart(
@@ -280,8 +443,46 @@ void main() {
       final m = state.mapper.value!;
       expect(m.itemCount, 901);
       expect(m.logScale, isTrue);
-      expect(m.mainBottomGapRect.height, _gap);
-      expect(m.mainContentTop, greaterThan(0));
+      // 三个参数改的三条边界：图例下沿（价格区上沿）、主图下沿（价格区下沿）、空白
+      const dims = ChartDims();
+      final legend = dims.mainLegendTop + 1 * dims.mainLegendRowHeight; // 一个主图指标一行
+      final split = PaneSplit.compute(
+        chartHeight: 600 - dims.bottomAxisHeight,
+        dims: dims,
+        showVolume: true,
+        subWeights: const [1, 1],
+        mainBottomGap: _gap,
+      );
+      final gap = m.mainBottomGapRect;
+      expect(m.mainRect.top, 0);
+      expect(m.mainContentTop, legend);
+      expect(m.mainRect.bottom, closeTo(split.mainBottom, 1e-9));
+      expect(gap, Rect.fromLTWH(0, split.mainBottom, 400, _gap));
+      expect(split.volTop, closeTo(gap.bottom + dims.paneGap, 1e-9));
+      // 三者从上到下依次排开，互不重叠
+      expect(m.mainContentTop, lessThan(m.mainRect.bottom));
+      expect(gap.top, m.mainRect.bottom);
+      expect(gap.bottom, lessThan(split.volTop));
+      // 对数刻度的价格区正好是 [图例下沿, 主图下沿]：上下沿价格的几何平均落在两者正中
+      final top = m.yToPrice(m.mainContentTop), bottom = m.yToPrice(m.mainRect.bottom);
+      expect(m.priceToY(math.sqrt(top * bottom)),
+          closeTo((m.mainContentTop + m.mainRect.bottom) / 2, 1e-6));
+      expect(m.yToPrice(gap.center.dy), lessThan(bottom));
+      // 可见 K 线都落在价格区里，没有进图例和空白
+      final c = state.candles;
+      for (var i = m.firstIndex; i <= m.lastIndex; i++) {
+        expect(m.priceToY(c[i].high), greaterThanOrEqualTo(m.mainContentTop - 1e-6), reason: '#$i');
+        expect(m.priceToY(c[i].low), lessThanOrEqualTo(m.mainRect.bottom + 1e-6), reason: '#$i');
+      }
+      // 空白里只有背景色
+      final px = await capture(tester);
+      var other = 0;
+      for (var y = gap.top; y < gap.bottom; y += 1 / px.ratio) {
+        for (var x = 0.0; x < gap.width; x += 1 / px.ratio) {
+          if (px.at(x, y) != ChartTheme.dark.background) other++;
+        }
+      }
+      expect(other, 0);
       expect(tester.takeException(), isNull);
       await matchGolden('14_main_bottom_gap_combo');
     });
