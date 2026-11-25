@@ -85,6 +85,9 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
 
   /// 主图下方留一行给宿主自己的控件（这里放指标开关）。
   bool _gapRow = false;
+
+  /// BOLL 上下轨之间填半透明底色（颜色由宿主定，这里取主题第二个指标色）。
+  bool _bollFill = false;
   static const double _gapHeight = 34;
   List<Indicator> _main = [_mainOptions['MA']!];
   List<TradeMark> _marks = const [];
@@ -211,6 +214,7 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
                 }),
               _chip(_dark ? 'Light' : 'Dark', false, text, () => setState(() => _dark = !_dark)),
               _chip('主图下留空', _gapRow, text, () => setState(() => _gapRow = !_gapRow)),
+              _chip('BOLL 底色', _bollFill, text, () => setState(() => _bollFill = !_bollFill)),
               _chip(
                 '脚本图元',
                 false,
@@ -229,7 +233,16 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
                       state: _state,
                       theme: theme,
                       mode: _period == 'Time' ? ChartMode.timeLine : ChartMode.candle,
-                      mainIndicators: _main,
+                      mainIndicators: [
+                        for (final i in _main)
+                          i is Boll && _bollFill
+                              ? Boll(
+                                  period: i.period,
+                                  k: i.k,
+                                  fillColor: theme.indicatorColor(1).withValues(alpha: 0.12),
+                                )
+                              : i,
+                      ],
                       subIndicators: _subs.selected,
                       tradeMarks: _marks,
                       blankScrollRatio: 0.3,

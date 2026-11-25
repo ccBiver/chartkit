@@ -1,6 +1,7 @@
 // 脚本图元默认关闭：传了 `scriptOutputs` 但控制器是空的、或设置了输出但整体隐藏（visible = false）时，
 // 图表要和基线（feat/flutter-port 9d3ee15）逐像素一致。场景与 default_off_golden_test.dart 相同，比对同一组参考图。
 // 这些用例都不传 mainBottomGap（默认 0，不留空）：参考图生成于这个参数出现之前，必须逐像素不变。
+// 这些用例里的 Boll 都不传 fillColor（默认不填）：参考图生成于这个参数出现之前，必须逐像素不变。
 import 'dart:math' as math;
 
 import 'package:chartkit_flutter/chartkit_flutter.dart';

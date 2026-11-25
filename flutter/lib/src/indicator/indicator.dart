@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show Color;
 
 import '../model/candle.dart';
 
@@ -23,11 +24,30 @@ class IndicatorLine {
       IndicatorLine(name, values ?? this.values, style: style);
 }
 
+/// 两条线之间的填充（如 BOLL 上下轨之间的底色）。[upper]、[lower] 是 [IndicatorSeries.lines] 的下标。
+/// 只对主图指标生效，画在蜡烛和指标线的下面；两条线在某根都有值才填。
+@immutable
+class IndicatorFill {
+  const IndicatorFill({required this.upper, required this.lower, required this.color});
+
+  final int upper;
+  final int lower;
+  final Color color;
+
+  @override
+  bool operator ==(Object other) =>
+      other is IndicatorFill && other.upper == upper && other.lower == lower && other.color == color;
+
+  @override
+  int get hashCode => Object.hash(upper, lower, color);
+}
+
 /// 一个指标的完整计算结果：可包含多条线/柱（如 MACD = DIF + DEA + 柱）。
 @immutable
 class IndicatorSeries {
   /// 所有线必须等长，保证渲染层按索引对齐时不越界；否则抛 [ArgumentError]。
-  IndicatorSeries(this.id, this.pane, List<IndicatorLine> lines)
+  /// [fill] 非空时在它指定的两条线之间填色（见 [IndicatorFill]）。
+  IndicatorSeries(this.id, this.pane, List<IndicatorLine> lines, {this.fill})
       : lines = List.unmodifiable(lines) {
     final n = size;
     if (lines.any((l) => l.values.length != n)) {
@@ -39,10 +59,13 @@ class IndicatorSeries {
   final Pane pane;
   final List<IndicatorLine> lines;
 
+  /// 两条线之间的填充；为空时不填。
+  final IndicatorFill? fill;
+
   int get size => lines.isEmpty ? 0 : lines.first.values.length;
 
   IndicatorSeries copyWith({List<IndicatorLine>? lines}) =>
-      IndicatorSeries(id, pane, lines ?? this.lines);
+      IndicatorSeries(id, pane, lines ?? this.lines, fill: fill);
 }
 
 /// 指标计算单元。无副作用：输入 K 线，输出独立的 [IndicatorSeries]，**不写回 Candle**。
