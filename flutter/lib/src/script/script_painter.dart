@@ -439,10 +439,12 @@ class _PaneGeom {
     required this.min,
     required this.max,
     this.log = false,
-  });
+    double? valueTop,
+  }) : valueTop = valueTop ?? top;
 
   factory _PaneGeom.main(ChartLayout l) => _PaneGeom(
         top: l.mainTop,
+        valueTop: l.mainContentTop,
         bottom: l.mainBottom,
         left: 0,
         right: l.chartWidth,
@@ -461,11 +463,15 @@ class _PaneGeom {
   /// 按对数刻度（只有主图会是）。
   final bool log;
 
+  /// 数值映射的顶边。主图开了图例留位时在图例下面（`ChartLayout.mainContentTop`），
+  /// [rect] 仍是整个窗格。
+  final double valueTop;
+
   Rect get rect => Rect.fromLTRB(left, top, right, bottom);
 
-  Object get key => (top, bottom, min, max, log);
+  Object get key => (top, valueTop, bottom, min, max, log);
 
-  double y(double v) => ChartLayout.priceToPixel(v, top, bottom, min, max, log: log);
+  double y(double v) => ChartLayout.priceToPixel(v, valueTop, bottom, min, max, log: log);
 }
 
 /// 可见的本地下标范围（含右侧留白里的虚拟下标），两边各多一根，免得线在边缘断开。

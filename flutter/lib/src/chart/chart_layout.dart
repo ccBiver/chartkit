@@ -112,10 +112,13 @@ class ChartLayout {
     required this.priceMax,
     required this.itemCount,
     required this.logScale,
+    this.mainContentTop = 0,
   });
 
   /// [candles] 不可为空；[candleWidth] 必须 > 0。
   /// [logScale] 时主图价格轴按对数刻度：价格区间只看正数，上下留白按对数算。
+  /// [mainContentInset] 是主图顶部给图例留出的高度：价格从这条线往下映射，
+  /// 窗格本身（网格、十字光标命中、[mainRect]）不变。最多占主图高度的 40%。
   factory ChartLayout.compute({
     required Size size,
     required List<Candle> candles,
@@ -133,6 +136,7 @@ class ChartLayout {
     ({double min, double max})? Function(int first, int last)? extraMainRange,
     bool closeOnly = false,
     bool logScale = false,
+    double mainContentInset = 0,
   }) {
     assert(candles.isNotEmpty && candleWidth > 0);
     final last = candles.length - 1;
@@ -199,8 +203,14 @@ class ChartLayout {
       priceMax: range.max,
       itemCount: candles.length,
       logScale: logScale,
+      mainContentTop: mainContentInset <= 0
+          ? 0
+          : math.min(mainContentInset, split.mainBottom * maxMainContentInsetRatio),
     );
   }
+
+  /// [mainContentTop] 最多占主图高度的比例：图很矮时不让图例把蜡烛挤没。
+  static const double maxMainContentInsetRatio = 0.4;
 
   final Size size;
 
@@ -237,6 +247,10 @@ class ChartLayout {
 
   double get mainTop => 0;
 
+  /// 主图价格区的顶边：价格映射从这里开始，往上是给图例留的位置。
+  /// 没开图例留位时等于 [mainTop]。
+  final double mainContentTop;
+
   double get rightAxisWidth => size.width - chartWidth;
 
   Rect get mainRect => Rect.fromLTRB(0, mainTop, chartWidth, mainBottom);
@@ -253,11 +267,11 @@ class ChartLayout {
 
   /// 价格 → 主图像素 Y。
   double priceToY(double price) =>
-      priceToPixel(price, mainTop, mainBottom, priceMin, priceMax, log: logScale);
+      priceToPixel(price, mainContentTop, mainBottom, priceMin, priceMax, log: logScale);
 
   /// 主图像素 Y → 价格（[priceToY] 的反函数）。
   double yToPrice(double y) =>
-      pixelToPrice(y, mainTop, mainBottom, priceMin, priceMax, log: logScale);
+      pixelToPrice(y, mainContentTop, mainBottom, priceMin, priceMax, log: logScale);
 
   /// 把数值 [v] 从区间 [lo]..[hi] 线性映射到像素区间 [top]..[bottom]（大值在上）。
   static double valueToY(double v, double top, double bottom, double lo, double hi) =>

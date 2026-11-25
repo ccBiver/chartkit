@@ -50,6 +50,7 @@ class ChartPaintConfig {
     this.drawing,
     this.scripts,
     this.logScale = false,
+    this.reserveMainLegend = false,
   });
 
   final ChartTheme theme;
@@ -83,6 +84,9 @@ class ChartPaintConfig {
 
   /// 主图价格轴按对数刻度。
   final bool logScale;
+
+  /// 主图顶部给图例留位置（见 `KLineChart.reserveMainLegend`）。
+  final bool reserveMainLegend;
 }
 
 /// 每帧变化的数据来源（指标结果、动画进度），由组件的 State 实现。
@@ -166,6 +170,12 @@ class KLineChartPainter extends CustomPainter {
       labelPad: 4 * config.unit,
       closeOnly: config.mode.closeOnly,
       logScale: config.logScale,
+      mainContentInset: mainLegendInset(
+        reserve: config.reserveMainLegend,
+        mode: config.mode,
+        rows: source.mainSeries.length,
+        dims: config.theme.dims,
+      ),
     );
   }
 
@@ -290,3 +300,15 @@ class KLineChartPainter extends CustomPainter {
 /// 当前生效的单根宽度：未缩放过（0）时取主题默认值。
 double effectiveCandleWidth(KLineChartState state, ChartDims dims) =>
     state.candleWidth > 0 ? state.candleWidth : dims.candleDefaultWidth;
+
+/// 主图顶部给图例留的高度：图例顶距 + 行数 × 行高；没开、分时模式（不显示图例）
+/// 或没有主图指标时为 0。和 `ChartLegend` 的位置用同一组 [ChartDims]。
+double mainLegendInset({
+  required bool reserve,
+  required ChartMode mode,
+  required int rows,
+  required ChartDims dims,
+}) {
+  if (!reserve || rows <= 0 || mode == ChartMode.timeLine) return 0;
+  return dims.mainLegendTop + rows * dims.mainLegendRowHeight;
+}

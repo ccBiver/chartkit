@@ -69,7 +69,8 @@ class DrawingProjection {
     required this.priceMin,
     required this.priceMax,
     this.logScale = false,
-  });
+    double? priceTop,
+  }) : _priceTop = priceTop;
 
   factory DrawingProjection.of(ChartLayout layout, DrawingTimeline timeline) => DrawingProjection(
         rect: layout.mainRect,
@@ -79,6 +80,7 @@ class DrawingProjection {
         priceMin: layout.priceMin,
         priceMax: layout.priceMax,
         logScale: layout.logScale,
+        priceTop: layout.mainContentTop,
       );
 
   /// 主图矩形（蜡烛区，不含右轴、量图、副图）。
@@ -92,6 +94,10 @@ class DrawingProjection {
   /// 主图价格轴按对数刻度。
   final bool logScale;
 
+  /// 价格映射的顶边（`ChartLayout.mainContentTop`）；不传时等于 [rect] 的顶。
+  double get priceTop => _priceTop ?? rect.top;
+  final double? _priceTop;
+
   /// 小数索引 → 像素 X（整数索引落在蜡烛中心）。
   double indexToX(double index) => rect.right - (rightFloat - index + 0.5) * candleWidth;
 
@@ -99,10 +105,10 @@ class DrawingProjection {
   double xToIndex(double x) => rightFloat + 0.5 - (rect.right - x) / candleWidth;
 
   double priceToY(double price) =>
-      ChartLayout.priceToPixel(price, rect.top, rect.bottom, priceMin, priceMax, log: logScale);
+      ChartLayout.priceToPixel(price, priceTop, rect.bottom, priceMin, priceMax, log: logScale);
 
   double yToPrice(double y) =>
-      ChartLayout.pixelToPrice(y, rect.top, rect.bottom, priceMin, priceMax, log: logScale);
+      ChartLayout.pixelToPrice(y, priceTop, rect.bottom, priceMin, priceMax, log: logScale);
 
   double timeToX(int time) => indexToX(timeline.indexOf(time));
 

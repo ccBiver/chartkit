@@ -16,6 +16,8 @@ class ChartDims {
     this.bottomAxisHeight = 18,
     this.paneGap = 6,
     this.subLegendHeight = 16,
+    this.mainLegendTop = 3,
+    this.mainLegendRowHeight = 15,
     this.volumePaneFraction = 0.16,
     this.subPaneFraction = 0.18,
     this.tradeMarkMaxVisibleBars = 50,
@@ -40,6 +42,13 @@ class ChartDims {
   /// 副图顶部图例独占行高（数值不与指标重叠）。
   final double subLegendHeight;
 
+  /// 主图图例（左上角指标读数）离图表顶的距离。
+  final double mainLegendTop;
+
+  /// 主图图例每行占的高度（一行字高加行间距）。开了 `KLineChart.reserveMainLegend`
+  /// 时按「行数 × 行高」在主图顶部给图例留出位置。
+  final double mainLegendRowHeight;
+
   /// 成交量窗格占图高比例。
   final double volumePaneFraction;
 
@@ -60,6 +69,8 @@ class ChartDims {
     double? bottomAxisHeight,
     double? paneGap,
     double? subLegendHeight,
+    double? mainLegendTop,
+    double? mainLegendRowHeight,
     double? volumePaneFraction,
     double? subPaneFraction,
     int? tradeMarkMaxVisibleBars,
@@ -75,6 +86,8 @@ class ChartDims {
         bottomAxisHeight: bottomAxisHeight ?? this.bottomAxisHeight,
         paneGap: paneGap ?? this.paneGap,
         subLegendHeight: subLegendHeight ?? this.subLegendHeight,
+        mainLegendTop: mainLegendTop ?? this.mainLegendTop,
+        mainLegendRowHeight: mainLegendRowHeight ?? this.mainLegendRowHeight,
         volumePaneFraction: volumePaneFraction ?? this.volumePaneFraction,
         subPaneFraction: subPaneFraction ?? this.subPaneFraction,
         tradeMarkMaxVisibleBars: tradeMarkMaxVisibleBars ?? this.tradeMarkMaxVisibleBars,

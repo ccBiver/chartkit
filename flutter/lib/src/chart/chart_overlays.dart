@@ -18,7 +18,7 @@ class ChartLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Positioned(
         left: 8,
-        top: 3,
+        top: chart.theme.dims.mainLegendTop,
         right: 8,
         child: IgnorePointer(
           child: ListenableBuilder(listenable: shownState(chart), builder: (context, _) => _rows()),
