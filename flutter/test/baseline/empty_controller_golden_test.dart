@@ -1,5 +1,6 @@
 // F1-05 补充：传了画线控制器但没有画线、没选工具时，图表也要和基线逐像素一致，
 // 点击、长按照常交给图表。场景与 default_off_golden_test.dart 相同，比对同一组参考图。
+// 这些用例里的 Boll 都不传 fillColor（默认不填）：参考图生成于这个参数出现之前，必须逐像素不变。
 import 'dart:math' as math;
 
 import 'package:chartkit_flutter/chartkit_flutter.dart';

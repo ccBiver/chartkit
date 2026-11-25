@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show Color;
 
 import '../model/candle.dart';
 import 'chart_registry.dart';
@@ -96,13 +97,17 @@ class Ema extends BuiltinIndicator {
 
 /// BOLL：主图布林带（默认 20, 2，标准口径）。
 class Boll extends BuiltinIndicator {
-  const Boll({this.period = 20, this.k = 2.0});
+  const Boll({this.period = 20, this.k = 2.0, this.fillColor});
 
   final int period;
   final double k;
 
+  /// 上轨和下轨之间的填充色，为空时不填。填充画在蜡烛、指标线、画线和脚本图元的下面，
+  /// 一般传半透明色。分时模式不画主图指标，也不画填充。
+  final Color? fillColor;
+
   @override
-  List<Object> get params => [period, k];
+  List<Object> get params => [period, k, if (fillColor != null) fillColor!];
 
   @override
   String get id => 'BOLL';
@@ -114,11 +119,17 @@ class Boll extends BuiltinIndicator {
   @override
   IndicatorSeries compute(List<Candle> candles) {
     final bands = boll(_closes(candles), period, k);
-    return IndicatorSeries(id, pane, [
-      IndicatorLine('UP', bands.up),
-      IndicatorLine('MB', bands.mb),
-      IndicatorLine('DN', bands.dn),
-    ]);
+    final fill = fillColor;
+    return IndicatorSeries(
+      id,
+      pane,
+      [
+        IndicatorLine('UP', bands.up),
+        IndicatorLine('MB', bands.mb),
+        IndicatorLine('DN', bands.dn),
+      ],
+      fill: fill == null ? null : IndicatorFill(upper: 0, lower: 2, color: fill),
+    );
   }
 }
 

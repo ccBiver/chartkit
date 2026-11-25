@@ -240,6 +240,8 @@ class KLineChartPainter extends CustomPainter {
 
     r.drawGrid();
     sp?.paintMainUnder();
+    // 主图指标的填充（BOLL 上下轨之间等）在脚本背景色之上、K 线之下；分时不画主图指标，也不画填充
+    if (config.mode != ChartMode.timeLine) r.drawMainFills(source.mainSeries);
     switch (config.mode) {
       case ChartMode.timeLine:
         r.drawTimeLine();

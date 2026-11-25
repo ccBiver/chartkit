@@ -299,6 +299,55 @@ class ChartRenderer {
     text.drawVCenterLeft(canvas, label, left, y, color);
   }
 
+  /// 主图指标两条线之间的填充（如 BOLL 上下轨），画在蜡烛和指标线下面。
+  ///
+  /// 按连续都有值的区间分段，每段一次画成一个多边形（不逐根画，免得盖住相邻蜡烛的一半）；
+  /// 可见范围两边各多取一根，边缘不缺角；裁在主图矩形里，不进右轴和下面的窗格。
+  void drawMainFills(List<IndicatorSeries> series) {
+    final l = layout;
+    for (final s in series) {
+      final fill = s.fill;
+      if (fill == null || fill.upper >= s.lines.length || fill.lower >= s.lines.length) continue;
+      final up = s.lines[fill.upper].values;
+      final dn = s.lines[fill.lower].values;
+      final n = math.min(up.length, dn.length);
+      final from = math.max(0, l.firstIndex - 1);
+      // 入场动画中只画到已展开的那根
+      final to = revealLast < l.lastIndex ? revealLast : math.min(n - 1, l.lastIndex + 1);
+      bool has(int i) {
+        final a = up[i], b = dn[i];
+        return a != null && b != null && a.isFinite && b.isFinite;
+      }
+
+      canvas.save();
+      canvas.clipRect(l.mainRect);
+      _fill.color = fill.color;
+      var i = from;
+      while (i <= to) {
+        if (!has(i)) {
+          i++;
+          continue;
+        }
+        var j = i;
+        while (j + 1 <= to && has(j + 1)) {
+          j++;
+        }
+        if (j > i) {
+          final path = Path()..moveTo(l.centerX(i), l.priceToY(up[i]!));
+          for (var k = i + 1; k <= j; k++) {
+            path.lineTo(l.centerX(k), l.priceToY(up[k]!));
+          }
+          for (var k = j; k >= i; k--) {
+            path.lineTo(l.centerX(k), l.priceToY(dn[k]!));
+          }
+          canvas.drawPath(path..close(), _fill);
+        }
+        i = j + 1;
+      }
+      canvas.restore();
+    }
+  }
+
   /// 主图叠加指标（SAR 等散点用圆点）。
   void drawMainIndicators(List<IndicatorSeries> series) {
     for (final s in series) {
