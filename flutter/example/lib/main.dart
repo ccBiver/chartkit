@@ -82,6 +82,10 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
   Timer? _loader;
   String _period = '15m';
   bool _dark = true;
+
+  /// 主图下方留一行给宿主自己的控件（这里放指标开关）。
+  bool _gapRow = false;
+  static const double _gapHeight = 34;
   List<Indicator> _main = [_mainOptions['MA']!];
   List<TradeMark> _marks = const [];
 
@@ -206,6 +210,7 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
                   _load();
                 }),
               _chip(_dark ? 'Light' : 'Dark', false, text, () => setState(() => _dark = !_dark)),
+              _chip('主图下留空', _gapRow, text, () => setState(() => _gapRow = !_gapRow)),
               _chip(
                 '脚本图元',
                 false,
@@ -216,39 +221,52 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
               ),
             ]),
             Expanded(
-              child: KLineChart(
-                state: _state,
-                theme: theme,
-                mode: _period == 'Time' ? ChartMode.timeLine : ChartMode.candle,
-                mainIndicators: _main,
-                subIndicators: _subs.selected,
-                tradeMarks: _marks,
-                blankScrollRatio: 0.3,
-                logo: const FlutterLogo(style: FlutterLogoStyle.horizontal),
-                onLoadMore: _loadMore,
-                onToggleFullscreen: () {},
-                drawingController: _drawings,
-                drawingLabels: const DrawingLabels(
-                  entry: '入场',
-                  target: '目标',
-                  stop: '止损',
-                  riskReward: '盈亏比',
-                  bars: '根',
-                ),
-                onTradeMarkTap:
-                    (m) => ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${m.isBuy ? 'Buy' : 'Sell'} @ ${m.price}')),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(
+                    child: KLineChart(
+                      state: _state,
+                      theme: theme,
+                      mode: _period == 'Time' ? ChartMode.timeLine : ChartMode.candle,
+                      mainIndicators: _main,
+                      subIndicators: _subs.selected,
+                      tradeMarks: _marks,
+                      blankScrollRatio: 0.3,
+                      logo: const FlutterLogo(style: FlutterLogoStyle.horizontal),
+                      mainBottomGap: _gapRow ? _gapHeight : 0,
+                      onLoadMore: _loadMore,
+                      onToggleFullscreen: () {},
+                      drawingController: _drawings,
+                      drawingLabels: const DrawingLabels(
+                        entry: '入场',
+                        target: '目标',
+                        stop: '止损',
+                        riskReward: '盈亏比',
+                        bars: '根',
+                      ),
+                      onTradeMarkTap:
+                          (m) => ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('${m.isBuy ? 'Buy' : 'Sell'} @ ${m.price}')),
+                          ),
                     ),
+                  ),
+                  // 宿主控件按 mapper 给的空白位置摆放
+                  if (_gapRow)
+                    ValueListenableBuilder<KLineChartMapper?>(
+                      valueListenable: _state.mapper,
+                      builder: (context, m, _) => m == null || m.mainBottomGapRect.isEmpty
+                          ? const SizedBox.shrink()
+                          : Positioned.fromRect(
+                              rect: m.mainBottomGapRect,
+                              child: _indicatorRow(text),
+                            ),
+                    ),
+                ],
               ),
             ),
             _drawingRow(text),
-            _chipRow(text, [
-              for (final e in _mainOptions.entries)
-                _chip(e.key, _main.contains(e.value), text, () => _toggleMain(e.value)),
-              const SizedBox(width: 12),
-              for (final e in _subOptions.entries)
-                _chip(e.key, _subs.isSelected(e.value.id), text, () => _subs.toggle(e.value)),
-            ]),
+            if (!_gapRow) _indicatorRow(text),
           ],
         ),
       ),
@@ -315,6 +333,14 @@ class _ChartDemoPageState extends State<ChartDemoPage> {
       _chip('恢复', false, text, () => d.loadJson(_savedDrawings)),
     ]);
   }
+
+  Widget _indicatorRow(Color text) => _chipRow(text, [
+        for (final e in _mainOptions.entries)
+          _chip(e.key, _main.contains(e.value), text, () => _toggleMain(e.value)),
+        const SizedBox(width: 12),
+        for (final e in _subOptions.entries)
+          _chip(e.key, _subs.isSelected(e.value.id), text, () => _subs.toggle(e.value)),
+      ]);
 
   Widget _chipRow(Color color, List<Widget> children) => SingleChildScrollView(
     scrollDirection: Axis.horizontal,

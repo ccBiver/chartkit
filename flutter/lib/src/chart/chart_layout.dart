@@ -15,6 +15,7 @@ const double _maxSubShare = 0.6;
 class PaneSplit {
   const PaneSplit._({
     required this.mainBottom,
+    required this.mainGap,
     required this.volTop,
     required this.volBottom,
     required this.subFullHeight,
@@ -26,34 +27,44 @@ class PaneSplit {
     required ChartDims dims,
     required bool showVolume,
     required List<double> subWeights,
+    double mainBottomGap = 0,
   }) {
-    final volH = showVolume ? chartHeight * dims.volumePaneFraction : 0.0;
+    // 主图下方给宿主留的空白不参与分配：窗格按去掉空白后的高度分，空白再插在主图和下面的窗格之间
+    final mainGap = mainBottomGap <= 0
+        ? 0.0
+        : math.min(mainBottomGap, chartHeight * ChartLayout.maxMainBottomGapRatio);
+    final paneHeight = chartHeight - mainGap;
+    final volH = showVolume ? paneHeight * dims.volumePaneFraction : 0.0;
     final subUnits = subWeights.fold<double>(0, (a, b) => a + b);
-    final perSubFull = chartHeight * dims.subPaneFraction;
+    final perSubFull = paneHeight * dims.subPaneFraction;
     // 副图过多时整体缩放，避免挤掉主图
-    final overflow = subUnits > 0 && perSubFull * subUnits > chartHeight * 0.5;
-    final subFull = overflow ? chartHeight * 0.5 / subUnits : perSubFull;
+    final overflow = subUnits > 0 && perSubFull * subUnits > paneHeight * 0.5;
+    final subFull = overflow ? paneHeight * 0.5 / subUnits : perSubFull;
     // 每格高 = 指标绘图高 + 图例行高，整体按动画权重伸缩
     final rawHeights = [for (final w in subWeights) (subFull + dims.subLegendHeight) * w];
     final rawSum = rawHeights.fold<double>(0, (a, b) => a + b);
     final gaps = dims.paneGap * subUnits;
     // 图例行与间隙不参与上面的缩放；矮图 + 多副图时再整体压一次，给主图留出至少 ~1/4 高度
-    final cap = chartHeight * _maxSubShare;
+    final cap = paneHeight * _maxSubShare;
     final squeeze = rawSum + gaps > cap && rawSum > 0 ? math.max(0.0, cap - gaps) / rawSum : 1.0;
     final heights = [for (final h in rawHeights) h * squeeze];
     final subTotal = rawSum * squeeze + gaps;
-    final mainBottom = chartHeight - volH - subTotal;
+    final mainBottom = paneHeight - volH - subTotal;
     final gap = showVolume ? dims.paneGap : 0.0;
     return PaneSplit._(
       mainBottom: mainBottom,
-      volTop: mainBottom + gap,
-      volBottom: mainBottom + volH,
+      mainGap: mainGap,
+      volTop: mainBottom + mainGap + gap,
+      volBottom: mainBottom + mainGap + volH,
       subFullHeight: subFull,
       subPaneHeights: List.unmodifiable(heights),
     );
   }
 
   final double mainBottom;
+
+  /// 主图下方给宿主留的空白高度（已按上限截过），从 [mainBottom] 往下。
+  final double mainGap;
   final double volTop;
   final double volBottom;
 
@@ -113,12 +124,16 @@ class ChartLayout {
     required this.itemCount,
     required this.logScale,
     this.mainContentTop = 0,
+    this.mainBottomGap = 0,
   });
 
   /// [candles] 不可为空；[candleWidth] 必须 > 0。
   /// [logScale] 时主图价格轴按对数刻度：价格区间只看正数，上下留白按对数算。
   /// [mainContentInset] 是主图顶部给图例留出的高度：价格从这条线往下映射，
   /// 窗格本身（网格、十字光标命中、[mainRect]）不变。最多占主图高度的 40%。
+  /// [mainBottomGap] 是主图下方给宿主控件留出的空白：紧跟在主图下面，成交量和副图整体往下挪。
+  /// 窗格按「绘图区高度 − 空白」分配，所以总高多给多少空白，各窗格就和不留空白时一样高。
+  /// 最多占绘图区高度的 40%。
   factory ChartLayout.compute({
     required Size size,
     required List<Candle> candles,
@@ -137,6 +152,7 @@ class ChartLayout {
     bool closeOnly = false,
     bool logScale = false,
     double mainContentInset = 0,
+    double mainBottomGap = 0,
   }) {
     assert(candles.isNotEmpty && candleWidth > 0);
     final last = candles.length - 1;
@@ -179,6 +195,7 @@ class ChartLayout {
       dims: dims,
       showVolume: showVolume,
       subWeights: subWeights,
+      mainBottomGap: mainBottomGap,
     );
     final vp = viewport(chartWidth);
     final range =
@@ -206,11 +223,15 @@ class ChartLayout {
       mainContentTop: mainContentInset <= 0
           ? 0
           : math.min(mainContentInset, split.mainBottom * maxMainContentInsetRatio),
+      mainBottomGap: split.mainGap,
     );
   }
 
   /// [mainContentTop] 最多占主图高度的比例：图很矮时不让图例把蜡烛挤没。
   static const double maxMainContentInsetRatio = 0.4;
+
+  /// [mainBottomGap] 最多占绘图区（不含时间轴）高度的比例。
+  static const double maxMainBottomGapRatio = 0.4;
 
   final Size size;
 
@@ -250,6 +271,13 @@ class ChartLayout {
   /// 主图价格区的顶边：价格映射从这里开始，往上是给图例留的位置。
   /// 没开图例留位时等于 [mainTop]。
   final double mainContentTop;
+
+  /// 主图下方给宿主留的空白高度（已按上限截过）；没留时为 0。
+  final double mainBottomGap;
+
+  /// 主图下方的空白：从 [mainBottom] 往下 [mainBottomGap] 高，横跨整个图宽（含右轴）。
+  /// 图表在这里只铺背景色，不画别的，也不接手势。没留时高度为 0。
+  Rect get mainBottomGapRect => Rect.fromLTWH(0, mainBottom, size.width, mainBottomGap);
 
   double get rightAxisWidth => size.width - chartWidth;
 

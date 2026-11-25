@@ -1,6 +1,7 @@
 // F1-05 默认关闭：不传画线参数时的图表要和基线（feat/flutter-port 9d3ee15）逐像素一致。
 // 参考图在 testdata/baseline/，是在基线提交上用同一份测试 `--update-goldens` 生成的；
 // 这里只用基线就有的参数，所以这份文件在基线和本分支上都能跑。
+// 这些用例都不传 mainBottomGap（默认 0，不留空）：参考图生成于这个参数出现之前，必须逐像素不变。
 import 'dart:math' as math;
 
 import 'package:chartkit_flutter/chartkit_flutter.dart';

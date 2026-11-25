@@ -2,6 +2,7 @@
 // 要和 feat/flutter-port 的 c9a569b（合并画线和脚本图元之后）逐像素一致。
 // 参考图在 testdata/baseline_chart_tools/，是在 c9a569b 上用同一份测试 `--update-goldens` 生成的；
 // 这里只用 c9a569b 就有的参数。
+// 这些用例都不传 mainBottomGap（默认 0，不留空）：参考图生成于这个参数出现之前，必须逐像素不变。
 import 'package:chartkit_flutter/chartkit_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

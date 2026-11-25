@@ -182,7 +182,9 @@ extension ChartRendererPanes on ChartRenderer {
     // 有副图时，主图底沿再放一个时间标签，免得跑到最底部时间轴去对照
     if (hasSubPanes) {
       final half = labelHalfHeight;
-      timeLabel(x, l.mainBottom - half, l.mainBottom + half, label, bg, fg);
+      // 主图下方留了空白时整个标签放在主图里，不压进空白
+      final center = l.mainBottomGap > 0 ? l.mainBottom - half : l.mainBottom;
+      timeLabel(x, center - half, center + half, label, bg, fg);
     }
   }
 
