@@ -25,6 +25,10 @@ class KLineChartMapper {
   /// 主图区域（蜡烛所在矩形，不含量图/副图/时间轴/右轴）。
   Rect get mainRect => _layout.mainRect;
 
+  /// 主图价格区的顶边。开了 `KLineChart.reserveMainLegend` 时在图例下面，宿主要把
+  /// 东西排在图例下方时以它为准；没开时等于 `mainRect.top`。
+  double get mainContentTop => _layout.mainContentTop;
+
   /// 整个图表的尺寸。
   Size get size => _layout.size;
 
@@ -70,6 +74,7 @@ class KLineChartMapper {
           other._layout.size == _layout.size &&
           other._layout.chartWidth == _layout.chartWidth &&
           other._layout.mainBottom == _layout.mainBottom &&
+          other._layout.mainContentTop == _layout.mainContentTop &&
           other._layout.candleWidth == _layout.candleWidth &&
           other._layout.rightFloat == _layout.rightFloat &&
           other._layout.priceMin == _layout.priceMin &&
@@ -83,6 +88,7 @@ class KLineChartMapper {
         _layout.size,
         _layout.chartWidth,
         _layout.mainBottom,
+        _layout.mainContentTop,
         _layout.candleWidth,
         _layout.rightFloat,
         _layout.priceMin,

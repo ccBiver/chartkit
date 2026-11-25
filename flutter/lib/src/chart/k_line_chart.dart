@@ -87,6 +87,7 @@ class KLineChart extends StatefulWidget {
     this.drawingLabels = const DrawingLabels(),
     this.scriptOutputs,
     this.logScale = false,
+    this.reserveMainLegend = false,
     this.replay,
   })  : resetAnimation = resetAnimation ?? entranceAnimation,
         assert(blankScrollRatio >= 0),
@@ -210,6 +211,12 @@ class KLineChart extends StatefulWidget {
   /// 主图价格轴按对数刻度。价格换算、刻度、现价标签、十字光标读数、自动价格区间、
   /// 画线和脚本图元都跟着换算；成交量和副图不受影响。非正数在对数刻度下画不出来，不计入价格区间。
   final bool logScale;
+
+  /// 主图顶部给左上角的指标读数图例留位置：价格从图例下面开始映射，最高价标签、
+  /// 贴顶的 K 线和指标线不会再压在图例上。留的高度 = `ChartDims.mainLegendTop`
+  /// + 图例行数（每个开着的主图指标一行）× `ChartDims.mainLegendRowHeight`，最多占主图高度的 40%。
+  /// 分时模式不显示图例，也不留。默认关闭：和原来一样，图例叠在 K 线上。
+  final bool reserveMainLegend;
 
   /// K 线回放。为空时没有回放。`replay.source` 必须就是 [state]。
   /// 选起点时点图上任意位置即选中那一根；回放中图上只有起点到游标的 K 线，主图和副图指标按这些 K 线重算，
@@ -784,6 +791,7 @@ class _KLineChartView extends State<KLineChart>
         drawing: _drawingConfig(),
         scripts: _scriptConfig(),
         logScale: widget.logScale,
+        reserveMainLegend: widget.reserveMainLegend,
       ),
     );
     // 撑满可用空间：父级约束宽松（如放在 Column 里）时也不会塌缩

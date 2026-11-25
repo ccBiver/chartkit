@@ -1,5 +1,9 @@
 ## Unreleased
 
+- 新增 `KLineChart.reserveMainLegend`（默认关闭）：主图顶部按「图例行数 × `ChartDims.mainLegendRowHeight` +
+  `ChartDims.mainLegendTop`」给左上角的指标读数图例留位置，价格从图例下面开始映射，最高价标签、贴顶的 K 线和
+  指标线不再压在图例上；最多占主图高度的 40%，分时模式不留。网格、十字光标命中和 `mainRect` 不变，画线和
+  脚本图元跟着新的价格区换算。`KLineChartMapper` 加 `mainContentTop`（价格区顶边，宿主把东西排在图例下方时用它）。
 - 新增图表类型（默认仍是蜡烛图）：`ChartMode.ohlc` 美国线、`ChartMode.line` 折线图、`ChartMode.area` 面积图。
   折线图和面积图复用分时的画法，价格区间只看收盘价；三者都照常画主图指标和脚本图元。
 - 新增主图对数坐标（默认关闭）：`KLineChart.logScale`。价格换算、网格标签、现价、十字光标、自动价格区间、画线和
