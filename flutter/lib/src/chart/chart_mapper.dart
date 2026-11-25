@@ -29,6 +29,11 @@ class KLineChartMapper {
   /// 东西排在图例下方时以它为准；没开时等于 `mainRect.top`。
   double get mainContentTop => _layout.mainContentTop;
 
+  /// 主图下方给宿主控件留的空白（`KLineChart.mainBottomGap`）：从 `mainRect.bottom` 往下，
+  /// 横跨整个图宽（含右轴）。宿主把自己的控件摆在这里；图表在里面只铺背景色、不接手势。
+  /// 没留空白时高度为 0。
+  Rect get mainBottomGapRect => _layout.mainBottomGapRect;
+
   /// 整个图表的尺寸。
   Size get size => _layout.size;
 
@@ -75,6 +80,7 @@ class KLineChartMapper {
           other._layout.chartWidth == _layout.chartWidth &&
           other._layout.mainBottom == _layout.mainBottom &&
           other._layout.mainContentTop == _layout.mainContentTop &&
+          other._layout.mainBottomGap == _layout.mainBottomGap &&
           other._layout.candleWidth == _layout.candleWidth &&
           other._layout.rightFloat == _layout.rightFloat &&
           other._layout.priceMin == _layout.priceMin &&
@@ -89,6 +95,7 @@ class KLineChartMapper {
         _layout.chartWidth,
         _layout.mainBottom,
         _layout.mainContentTop,
+        _layout.mainBottomGap,
         _layout.candleWidth,
         _layout.rightFloat,
         _layout.priceMin,

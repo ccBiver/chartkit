@@ -116,6 +116,7 @@ ValueListenableBuilder(
 | `blankScrollWidth` | 右侧可拖出的留白，按绝对宽度指定（优先于 `blankScrollRatio`） |
 | `initialBlankScroll` | 首屏和每次 `setData` 后让最新一根停在留白区左缘（右侧先空出留白），默认 `false` 贴右 |
 | `showHighLow` | 标注可见区的最高价与最低价 |
+| `mainBottomGap` | 主图正下方给宿主控件留的空白高度，副图整体下移；位置从 `mapper.mainBottomGapRect` 取，图表在里面不画东西、不接手势 |
 
 主题里与此相关的颜色：`crosshairVertical` / `crosshairVerticalWidth`（竖线单独配色，给宽度则画成半透明竖带）、
 `lastPriceText`（现价标签文字色）、`highLowText`。

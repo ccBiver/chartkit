@@ -199,7 +199,11 @@ class ChartRenderer {
       // 对数刻度下网格仍等分，标的是那一格对应的价格
       final price = l.logScale ? l.yToPrice(y) : l.priceMax - (l.priceMax - l.priceMin) * r / rows;
       // 最上面一档贴着画布上沿：基线下移到整行可见，避免被裁掉
-      final baseline = math.max(y + text.scaledFontSize / 3, text.scaledFontSize);
+      var baseline = math.max(y + text.scaledFontSize / 3, text.scaledFontSize);
+      // 主图下方留了空白时，最下面一档上移到整行落在主图里（空白归宿主，伸进去的部分会被裁掉）
+      if (r == rows && l.mainBottomGap > 0) {
+        baseline = math.min(baseline, l.mainBottom - text.scaledFontSize * 0.3);
+      }
       _rightAlignedText(formatter.price(price), baseline, theme.axisText);
     }
   }
@@ -363,7 +367,9 @@ class ChartRenderer {
     const padH = 6.0;
     final height = text.lineHeight + 6;
     final right = label.left - 4;
-    final cy = _clamp(label.center.dy, height, layout.chartHeight - height);
+    // 主图下方留了空白时不让贴纸伸进空白
+    final bottom = layout.mainBottomGap > 0 ? layout.mainBottom : layout.chartHeight;
+    final cy = _clamp(label.center.dy, height, bottom - height);
     void pill(String s, Color color, double top) {
       final width = text.measure(s) + padH * 2;
       roundRect(color, Rect.fromLTWH(right - width, top, width, height), 4);

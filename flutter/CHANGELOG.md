@@ -1,5 +1,9 @@
 ## Unreleased
 
+- 新增 `KLineChart.mainBottomGap`（默认 0，行为不变）：在主图正下方给宿主自己的控件留一段空白，成交量和副图整体往下挪；
+  没有副图时空白在主图和时间轴之间。各窗格按「绘图区高度 − 空白」分配，宿主把图表高度加上空白，主图和副图就和
+  原来一样高。空白里只铺背景色，不画网格、十字光标和标签，落在里面的手势也不归图表；最多占绘图区高度的 40%。
+  `KLineChartMapper` 加 `mainBottomGapRect`，宿主按它摆放控件。
 - 新增 `KLineChart.reserveMainLegend`（默认关闭）：主图顶部按「图例行数 × `ChartDims.mainLegendRowHeight` +
   `ChartDims.mainLegendTop`」给左上角的指标读数图例留位置，价格从图例下面开始映射，最高价标签、贴顶的 K 线和
   指标线不再压在图例上；最多占主图高度的 40%，分时模式不留。网格、十字光标命中和 `mainRect` 不变，画线和

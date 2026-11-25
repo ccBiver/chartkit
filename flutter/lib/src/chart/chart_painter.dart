@@ -1,3 +1,5 @@
+import 'dart:ui' show ClipOp;
+
 import 'package:flutter/widgets.dart';
 
 import '../drawing/drawing_geometry.dart';
@@ -51,6 +53,7 @@ class ChartPaintConfig {
     this.scripts,
     this.logScale = false,
     this.reserveMainLegend = false,
+    this.mainBottomGap = 0,
   });
 
   final ChartTheme theme;
@@ -87,6 +90,9 @@ class ChartPaintConfig {
 
   /// 主图顶部给图例留位置（见 `KLineChart.reserveMainLegend`）。
   final bool reserveMainLegend;
+
+  /// 主图下方给宿主留的空白高度（见 `KLineChart.mainBottomGap`）。
+  final double mainBottomGap;
 }
 
 /// 每帧变化的数据来源（指标结果、动画进度），由组件的 State 实现。
@@ -137,6 +143,11 @@ class KLineChartPainter extends CustomPainter {
     final layout = _layoutFor(size, scripts);
     source.onFrameLayout(layout);
     if (layout != null) {
+      final gap = layout.mainBottomGapRect;
+      // 主图下方的空白归宿主：只留背景色，之后的内容（网格、十字光标、标签）都不进去
+      if (!gap.isEmpty) {
+        canvas.clipRect(gap, clipOp: ClipOp.difference);
+      }
       _paintChart(canvas, layout, scripts);
     } else if (state.candles.isEmpty && config.showSkeleton) {
       _paintSkeleton(canvas, size);
@@ -176,6 +187,7 @@ class KLineChartPainter extends CustomPainter {
         rows: source.mainSeries.length,
         dims: config.theme.dims,
       ),
+      mainBottomGap: config.mainBottomGap,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -88,8 +89,10 @@ class KLineChart extends StatefulWidget {
     this.scriptOutputs,
     this.logScale = false,
     this.reserveMainLegend = false,
+    this.mainBottomGap = 0,
     this.replay,
   })  : resetAnimation = resetAnimation ?? entranceAnimation,
+        assert(mainBottomGap >= 0),
         assert(blankScrollRatio >= 0),
         assert(blankScrollWidth >= 0),
         assert(logoOpacity >= 0 && logoOpacity <= 1);
@@ -217,6 +220,13 @@ class KLineChart extends StatefulWidget {
   /// + 图例行数（每个开着的主图指标一行）× `ChartDims.mainLegendRowHeight`，最多占主图高度的 40%。
   /// 分时模式不显示图例，也不留。默认关闭：和原来一样，图例叠在 K 线上。
   final bool reserveMainLegend;
+
+  /// 主图正下方给宿主控件留的空白高度（逻辑像素），默认 0：和原来一样，副图紧挨主图。
+  /// 大于 0 时空白插在主图和下面的窗格（成交量、副图）之间，那些窗格整体往下挪；没有副图时在主图和时间轴之间。
+  /// 各窗格按「图表高度 − 时间轴 − 空白」分配，所以宿主把图表高度加上这段空白，主图和副图就和不留空白时一样高。
+  /// 空白里图表只铺背景色，不画网格、十字光标、标签，也不接手势；位置从 `KLineChartMapper.mainBottomGapRect` 取。
+  /// 最多占绘图区高度的 40%。
+  final double mainBottomGap;
 
   /// K 线回放。为空时没有回放。`replay.source` 必须就是 [state]。
   /// 选起点时点图上任意位置即选中那一根；回放中图上只有起点到游标的 K 线，主图和副图指标按这些 K 线重算，
@@ -792,6 +802,7 @@ class _KLineChartView extends State<KLineChart>
         scripts: _scriptConfig(),
         logScale: widget.logScale,
         reserveMainLegend: widget.reserveMainLegend,
+        mainBottomGap: widget.mainBottomGap,
       ),
     );
     // 撑满可用空间：父级约束宽松（如放在 Column 里）时也不会塌缩
@@ -808,7 +819,7 @@ class _KLineChartView extends State<KLineChart>
   Widget _buildLayers(KLineChartPainter painter, Size size) => Stack(
         fit: StackFit.expand,
         children: [
-          Positioned.fill(child: _buildCanvas(painter)),
+          Positioned.fill(child: _withGapPassThrough(_buildCanvas(painter))),
           ChartLegend(chart: widget, seriesOf: () => _mainSeries),
           ChartCrosshairPanel(chart: widget, chartWidth: size.width),
           ...buildMainPaneOverlays(chart: widget, mainBottom: _mainBottom(size.height)),
@@ -934,5 +945,38 @@ class _KLineChartView extends State<KLineChart>
         subWeights: widget.scriptOutputs == null
             ? subPaneWeights
             : [...subPaneWeights, ...scriptPaneWeights],
+        mainBottomGap: widget.mainBottomGap,
       ).mainBottom;
+
+  /// 留了主图下方空白时，落在空白里的按下不归图表（交给叠在上面或后面的宿主控件）。
+  Widget _withGapPassThrough(Widget child) => widget.mainBottomGap > 0
+      ? _GapPassThrough(gapOf: () => _layout?.mainBottomGapRect, child: child)
+      : child;
+}
+
+/// 命中测试时跳过 [gapOf] 给出的矩形：落在里面的指针事件不进图表的手势识别。
+class _GapPassThrough extends SingleChildRenderObjectWidget {
+  const _GapPassThrough({required this.gapOf, required super.child});
+
+  final Rect? Function() gapOf;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderGapPassThrough(gapOf);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderGapPassThrough renderObject) =>
+      renderObject.gapOf = gapOf;
+}
+
+class _RenderGapPassThrough extends RenderProxyBox {
+  _RenderGapPassThrough(this.gapOf);
+
+  Rect? Function() gapOf;
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final gap = gapOf();
+    if (gap != null && !gap.isEmpty && gap.contains(position)) return false;
+    return super.hitTest(result, position: position);
+  }
 }
