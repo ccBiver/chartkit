@@ -519,12 +519,19 @@ class _ScriptPainter {
   /// 回放的游标；非空时只画到它为止，跨过它的方框、线段从它右边裁掉。
   final int? cutoff;
 
-  /// 图元的裁剪区：窗格，回放时右边到游标那根的右沿。
+  /// 图元的裁剪区：窗格，回放时右边到游标那根的右沿。背景色按它裁（整列铺到窗格顶）。
   Rect get _clip {
     final k = cutoff;
     if (k == null) return pane.rect;
     final r = pane.rect;
     return Rect.fromLTRB(r.left, r.top, math.min(r.right, x(k) + cw / 2), r.bottom);
+  }
+
+  /// 按价位定位的图元的裁剪区：[_clip] 的顶边换成数值映射的顶边。主图开了图例留位时，
+  /// 价位从图例下面开始映射，略高于可见范围的水平线、方框等不会画进图例那一条。
+  Rect get _valueClip {
+    final c = _clip;
+    return pane.valueTop > c.top ? Rect.fromLTRB(c.left, pane.valueTop, c.right, c.bottom) : c;
   }
 
   final Paint _fill = Paint()..isAntiAlias = true;
@@ -593,7 +600,7 @@ class _ScriptPainter {
   /// 填充 → 水平线 → 自绘 K 线 → 序列 → 标记 → 成交点 → 方框 → 线段 → 标签 → 表格，最后是右轴最新值。
   void paintContent() {
     canvas.save();
-    canvas.clipRect(_clip);
+    canvas.clipRect(_valueClip);
     _fills();
     for (final h in o.hlines) {
       if (!h.visible || !_here(h.mainPane)) continue;
@@ -632,8 +639,8 @@ class _ScriptPainter {
     for (var j = 0; j < o.labels.length; j++) {
       if (_here(o.labels[j].mainPane)) _label(o.labels[j], r.labelK[j]);
     }
-    if (cutoff != null) {
-      // 表格按窗格定位，和时间无关：回放时不跟着游标裁
+    if (cutoff != null || pane.valueTop > pane.top) {
+      // 表格按窗格定位，和时间、价位都无关：回放时不跟着游标裁，图例留位时也照常贴窗格的边
       canvas
         ..restore()
         ..save()
