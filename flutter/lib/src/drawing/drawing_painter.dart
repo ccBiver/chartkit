@@ -66,7 +66,8 @@ class DrawingPainter {
   void paintAll(DrawingController controller) {
     if (!controller.visible) return;
     canvas.save();
-    canvas.clipRect(_rect);
+    // 裁在价格区里：主图开了图例留位时，价位从图例下沿（priceTop）开始映射，不画进图例那一条
+    canvas.clipRect(Rect.fromLTRB(_rect.left, projection.priceTop, _rect.right, _rect.bottom));
     final selectedId = controller.selectedId;
     for (final d in controller.drawings) {
       paintDrawing(d, selected: d.id == selectedId);
