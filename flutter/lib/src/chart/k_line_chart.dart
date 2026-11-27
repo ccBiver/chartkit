@@ -15,6 +15,7 @@ import '../indicator/indicator.dart';
 import '../indicator/indicator_engine.dart';
 import '../model/candle.dart';
 import '../script/script_controller.dart';
+import '../script/script_hit.dart';
 import '../script/script_painter.dart';
 import 'chart_formatter.dart';
 import 'chart_gestures.dart';
@@ -83,6 +84,7 @@ class KLineChart extends StatefulWidget {
     this.onLoadMore,
     this.onCrosshairChange,
     this.onTradeMarkTap,
+    this.onScriptTap,
     this.drawingController,
     this.drawingTheme = const DrawingTheme(),
     this.drawingLabels = const DrawingLabels(),
@@ -197,6 +199,16 @@ class KLineChart extends StatefulWidget {
   final ValueChanged<Candle?>? onCrosshairChange;
   final ValueChanged<TradeMark>? onTradeMarkTap;
 
+  /// 点到脚本图元（[scriptOutputs] 里的标记、成交点、标签、线段、水平线、方框）时回调，内容见 [ScriptHit]。
+  /// 为空时不做点选，点击的行为和原来完全一样。
+  ///
+  /// 命中范围是图元画出来的形状再往外放 [scriptHitSlop]。几个图元都点到时：标记、成交、标签优先于
+  /// 线段、水平线，再优先于方框；同一类取离得最近的，一样近取画在上面的。
+  /// 点击先交给回放选起点和画线（[drawingController]：正在新建、点中画线、取消选中都由画线处理），
+  /// 常驻的十字光标显示时这次点击只关掉它；之后才看脚本图元，点到了就不再触发 [onTradeMarkTap]
+  /// 和点击唤出十字光标。长按、拖动、缩放不受影响。
+  final ValueChanged<ScriptHit>? onScriptTap;
+
   /// 画线。为空时不开启画线，图表的界面和手势与原来完全一样。
   /// 画线画在主图里，在 K 线之上、[overlayPainter] 和十字光标之下。手势分工见 `DrawingGestures`。
   final DrawingController? drawingController;
@@ -258,8 +270,12 @@ class _KLineChartView extends State<KLineChart>
       AnimationController(vsync: this, value: widget.entranceAnimation ? 0 : 1);
   late final AnimationController _skeleton =
       AnimationController(vsync: this, duration: _skeletonDuration);
-  late final ChartGestures _gestures =
-      ChartGestures(vsync: this, widgetOf: () => widget, layoutOf: () => _layout);
+  late final ChartGestures _gestures = ChartGestures(
+    vsync: this,
+    widgetOf: () => widget,
+    layoutOf: () => _layout,
+    scriptHitAt: _scriptHitAt,
+  );
   late final DrawingGestures _drawingGestures = DrawingGestures(
     controllerOf: () => widget.drawingController,
     projectionOf: _drawingProjection,
@@ -744,6 +760,26 @@ class _KLineChartView extends State<KLineChart>
     if (_scriptPanes.length == before) return;
     controller.dispose();
     _onSubPaneTick();
+  }
+
+  /// [position] 处点到的脚本图元。和绘制用同一帧的布局、同一套脚本和窗格。
+  ScriptHit? _scriptHitAt(Offset position) {
+    final controller = widget.scriptOutputs;
+    final layout = _layout;
+    final config = _scriptConfig();
+    if (controller == null || layout == null || config == null) return null;
+    final builtIn = subPaneIds.length;
+    final panes = layout.subPanes;
+    return hitTestScripts(
+      layout: layout,
+      candles: _state.candles,
+      config: config,
+      formatter: widget.formatter,
+      scripts: controller.resolved(),
+      subPanes: builtIn < panes.length ? panes.sublist(builtIn) : const [],
+      ids: scriptPaneIds,
+      position: position,
+    );
   }
 
   ScriptPaintConfig? _scriptConfig() {
