@@ -1047,11 +1047,16 @@ class _ScriptPainter {
       final tp = text.layout(t.text, t.points ?? fontOf(t.size), tc, t.halign);
       const pad = 3.0;
       final inner = rect.deflate(pad);
-      final dx = switch (t.halign) {
-        ScriptHAlign.left => inner.left,
-        ScriptHAlign.center => inner.center.dx - tp.width / 2,
-        ScriptHAlign.right => inner.right - tp.width,
-      };
+      // 方框左端在窗格左边以外时，文字不跟着出界：最多退到和往左延伸的方框一样的位置，
+      // 拖动时贴着窗格左边。放不下的部分照旧被方框右边裁掉。
+      final dx = math.max(
+        switch (t.halign) {
+          ScriptHAlign.left => inner.left,
+          ScriptHAlign.center => inner.center.dx - tp.width / 2,
+          ScriptHAlign.right => inner.right - tp.width,
+        },
+        _leftEdge + pad,
+      );
       final dy = switch (t.valign) {
         ScriptVAlign.top => inner.top,
         ScriptVAlign.center => inner.center.dy - tp.height / 2,
