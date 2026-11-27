@@ -1,5 +1,6 @@
 // 主图下方留空（KLineChart.mainBottomGap）默认不留：显式传 0 时，图表要和加这个参数之前的基线参考图逐像素一致。
 // 比对的参考图都是在这个参数出现之前生成的：testdata/baseline/（9d3ee15）和 testdata/baseline_chart_tools/（c9a569b）。
+// （baseline_chart_tools/01_all_on_candles 后来因为标签气泡翻转重新生成过，见 chart_tools_off_golden_test.dart。）
 // 不传这个参数的情况由同目录的 default_off、script_off、chart_tools_off 三份基线测试覆盖（它们都不传 mainBottomGap）。
 // 这里挑五个场景再显式传一次 0：默认蜡烛、长按十字光标加副图，以及画线、脚本图元、内置指标全开的三种配置。
 import 'dart:math' as math;

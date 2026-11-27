@@ -1047,11 +1047,16 @@ class _ScriptPainter {
       final tp = text.layout(t.text, t.points ?? fontOf(t.size), tc, t.halign);
       const pad = 3.0;
       final inner = rect.deflate(pad);
-      final dx = switch (t.halign) {
-        ScriptHAlign.left => inner.left,
-        ScriptHAlign.center => inner.center.dx - tp.width / 2,
-        ScriptHAlign.right => inner.right - tp.width,
-      };
+      // 方框左端在窗格左边以外时，文字不跟着出界：最多退到和往左延伸的方框一样的位置，
+      // 拖动时贴着窗格左边。放不下的部分照旧被方框右边裁掉。
+      final dx = math.max(
+        switch (t.halign) {
+          ScriptHAlign.left => inner.left,
+          ScriptHAlign.center => inner.center.dx - tp.width / 2,
+          ScriptHAlign.right => inner.right - tp.width,
+        },
+        _leftEdge + pad,
+      );
       final dy = switch (t.valign) {
         ScriptVAlign.top => inner.top,
         ScriptVAlign.center => inner.center.dy - tp.height / 2,
@@ -1146,7 +1151,7 @@ class _ScriptPainter {
             ScriptLabelStyle.labelUpperRight ||
             ScriptLabelStyle.labelLowerLeft ||
             ScriptLabelStyle.labelLowerRight:
-        _bubble(l.text, p, l.style, bg, fg, font, l.align);
+        _bubble(l.text, p, l.style, bg, fg, font, l.align, fit: true);
       default:
         // 形状样式：形状画在锚点，文字在形状上方（朝上的形状放下方）
         final h = l.points != null
@@ -1164,44 +1169,29 @@ class _ScriptPainter {
   }
 
   /// 带箭头的气泡：箭头尖在 [p]，气泡按 [style] 放在它的某一侧。
+  ///
+  /// [fit] 时按价位区（[_valueClip] 的上下沿）摆：箭头尖不在价位区里就不画；气泡往上或往下伸出价位区、
+  /// 翻到箭头尖另一侧又放得下时，翻过去画（箭头跟着翻）。没被裁的照原样画。
   void _bubble(String s, Offset p, ScriptLabelStyle style, Color? bg, Color? fg, double font,
-      ScriptHAlign align) {
+      ScriptHAlign align,
+      {bool fit = false}) {
     if (bg == null && (fg == null || s.isEmpty)) return;
+    final top = _valueClip.top, bottom = _valueClip.bottom;
+    if (fit && (p.dy < top || p.dy > bottom)) return;
     final tp = s.isEmpty || fg == null ? null : text.layout(s, font, fg, align);
-    const padH = 4.0, padV = 2.0, ptr = 5.0;
+    const padH = 4.0, padV = 2.0;
     final w = (tp?.width ?? 4) + padH * 2;
     final h = (tp?.height ?? 4) + padV * 2;
-    const diag = ptr * 0.8;
-    final Rect box;
-    final List<Offset> pointer;
-    switch (style) {
-      case ScriptLabelStyle.labelUp:
-        box = Rect.fromLTWH(p.dx - w / 2, p.dy + ptr, w, h);
-        pointer = [p, Offset(p.dx + ptr, box.top), Offset(p.dx - ptr, box.top)];
-      case ScriptLabelStyle.labelDown:
-        box = Rect.fromLTWH(p.dx - w / 2, p.dy - ptr - h, w, h);
-        pointer = [p, Offset(p.dx + ptr, box.bottom), Offset(p.dx - ptr, box.bottom)];
-      case ScriptLabelStyle.labelLeft:
-        box = Rect.fromLTWH(p.dx + ptr, p.dy - h / 2, w, h);
-        pointer = [p, Offset(box.left, p.dy - ptr), Offset(box.left, p.dy + ptr)];
-      case ScriptLabelStyle.labelRight:
-        box = Rect.fromLTWH(p.dx - ptr - w, p.dy - h / 2, w, h);
-        pointer = [p, Offset(box.right, p.dy - ptr), Offset(box.right, p.dy + ptr)];
-      case ScriptLabelStyle.labelUpperLeft:
-        box = Rect.fromLTWH(p.dx + diag, p.dy + diag, w, h);
-        pointer = [p, Offset(box.left + ptr, box.top), Offset(box.left, box.top + ptr)];
-      case ScriptLabelStyle.labelUpperRight:
-        box = Rect.fromLTWH(p.dx - diag - w, p.dy + diag, w, h);
-        pointer = [p, Offset(box.right - ptr, box.top), Offset(box.right, box.top + ptr)];
-      case ScriptLabelStyle.labelLowerLeft:
-        box = Rect.fromLTWH(p.dx + diag, p.dy - diag - h, w, h);
-        pointer = [p, Offset(box.left + ptr, box.bottom), Offset(box.left, box.bottom - ptr)];
-      case ScriptLabelStyle.labelLowerRight:
-        box = Rect.fromLTWH(p.dx - diag - w, p.dy - diag - h, w, h);
-        pointer = [p, Offset(box.right - ptr, box.bottom), Offset(box.right, box.bottom - ptr)];
-      default:
-        box = Rect.fromCenter(center: p, width: w, height: h);
-        pointer = const [];
+    var (box, pointer) = _bubbleShape(style, p, w, h);
+    if (fit) {
+      final flipped = _flipped(style);
+      if (flipped != null && (box.top < top || box.bottom > bottom)) {
+        final (fbox, fpointer) = _bubbleShape(flipped, p, w, h);
+        if (fbox.top >= top && fbox.bottom <= bottom) {
+          box = fbox;
+          pointer = fpointer;
+        }
+      }
     }
     if (bg != null) {
       canvas.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(2)), _fill..color = bg);
@@ -1217,6 +1207,51 @@ class _ScriptPainter {
     }
     tp?.paint(canvas, Offset(box.left + padH, box.top + padV));
   }
+
+  /// 气泡在箭头尖 [p] 哪一侧：返回气泡矩形和箭头三角形（没有箭头时为空）。
+  static (Rect, List<Offset>) _bubbleShape(ScriptLabelStyle style, Offset p, double w, double h) {
+    const ptr = 5.0, diag = ptr * 0.8;
+    switch (style) {
+      case ScriptLabelStyle.labelUp:
+        final box = Rect.fromLTWH(p.dx - w / 2, p.dy + ptr, w, h);
+        return (box, [p, Offset(p.dx + ptr, box.top), Offset(p.dx - ptr, box.top)]);
+      case ScriptLabelStyle.labelDown:
+        final box = Rect.fromLTWH(p.dx - w / 2, p.dy - ptr - h, w, h);
+        return (box, [p, Offset(p.dx + ptr, box.bottom), Offset(p.dx - ptr, box.bottom)]);
+      case ScriptLabelStyle.labelLeft:
+        final box = Rect.fromLTWH(p.dx + ptr, p.dy - h / 2, w, h);
+        return (box, [p, Offset(box.left, p.dy - ptr), Offset(box.left, p.dy + ptr)]);
+      case ScriptLabelStyle.labelRight:
+        final box = Rect.fromLTWH(p.dx - ptr - w, p.dy - h / 2, w, h);
+        return (box, [p, Offset(box.right, p.dy - ptr), Offset(box.right, p.dy + ptr)]);
+      case ScriptLabelStyle.labelUpperLeft:
+        final box = Rect.fromLTWH(p.dx + diag, p.dy + diag, w, h);
+        return (box, [p, Offset(box.left + ptr, box.top), Offset(box.left, box.top + ptr)]);
+      case ScriptLabelStyle.labelUpperRight:
+        final box = Rect.fromLTWH(p.dx - diag - w, p.dy + diag, w, h);
+        return (box, [p, Offset(box.right - ptr, box.top), Offset(box.right, box.top + ptr)]);
+      case ScriptLabelStyle.labelLowerLeft:
+        final box = Rect.fromLTWH(p.dx + diag, p.dy - diag - h, w, h);
+        return (box, [p, Offset(box.left + ptr, box.bottom), Offset(box.left, box.bottom - ptr)]);
+      case ScriptLabelStyle.labelLowerRight:
+        final box = Rect.fromLTWH(p.dx - diag - w, p.dy - diag - h, w, h);
+        return (box, [p, Offset(box.right - ptr, box.bottom), Offset(box.right, box.bottom - ptr)]);
+      default:
+        return (Rect.fromCenter(center: p, width: w, height: h), const []);
+    }
+  }
+
+  /// 上下翻过来的样式：气泡换到箭头尖的另一侧，水平方向不变。左、右、居中的气泡竖直方向
+  /// 跨着箭头尖，翻了也一样，返回 null。
+  static ScriptLabelStyle? _flipped(ScriptLabelStyle style) => switch (style) {
+        ScriptLabelStyle.labelUp => ScriptLabelStyle.labelDown,
+        ScriptLabelStyle.labelDown => ScriptLabelStyle.labelUp,
+        ScriptLabelStyle.labelUpperLeft => ScriptLabelStyle.labelLowerLeft,
+        ScriptLabelStyle.labelLowerLeft => ScriptLabelStyle.labelUpperLeft,
+        ScriptLabelStyle.labelUpperRight => ScriptLabelStyle.labelLowerRight,
+        ScriptLabelStyle.labelLowerRight => ScriptLabelStyle.labelUpperRight,
+        _ => null,
+      };
 
   void _table(ScriptTable t) {
     if (t.cells.isEmpty || t.columns <= 0 || t.rows <= 0) return;
