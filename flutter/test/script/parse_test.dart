@@ -264,6 +264,41 @@ void main() {
           r.warnings, ['unknown field output.extra ignored', 'unknown field series.glow ignored']);
     });
 
+    test('top-level ext is kept as is for the host, without warnings', () {
+      final ext = {
+        'signals': [
+          {'t': 1, 'price': 2.5, 'note': null},
+        ],
+        'anything': {'nested': true},
+      };
+      final r = parseScriptOutput(minimal()..['ext'] = ext);
+      expect(r.ok, isTrue);
+      expect(r.warnings, isEmpty);
+      expect(r.output!.ext, ext);
+      // 字符串形式也一样：解码后的值
+      final s = parseScriptOutput(jsonEncode(minimal()..['ext'] = ext));
+      expect(s.warnings, isEmpty);
+      expect(s.output!.ext, ext);
+      // 不是对象也照收
+      expect(parseScriptOutput(minimal()..['ext'] = 'v2').output!.ext, 'v2');
+    });
+
+    test('ext is null when absent; only the top level is exempt', () {
+      expect(parseScriptOutput(minimal()).output!.ext, isNull);
+      final j = minimal()
+        ..['ext'] = 1
+        ..['extra'] = 1
+        ..['series'] = [
+          {...minimal()['series'][0], 'ext': 1},
+        ];
+      final r = parseScriptOutput(j);
+      expect(
+          r.warnings, ['unknown field output.extra ignored', 'unknown field series.ext ignored']);
+      // 和不带 ext 时解析出来的图元一样
+      final plain = parseScriptOutput(minimal()).output!;
+      expect(describe(parseScriptOutput(minimal()..['ext'] = {'a': 1}).output!), describe(plain));
+    });
+
     test('unknown enum values: cosmetic ones fall back, the rest skip that element only', () {
       final j = minimal()
         ..['series'] = [

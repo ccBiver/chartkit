@@ -581,6 +581,7 @@ class ScriptOutput {
     required this.tables,
     required this.inputs,
     required this.engineWarnings,
+    this.ext,
   });
 
   final String scriptId;
@@ -615,6 +616,10 @@ class ScriptOutput {
 
   /// 引擎自己的警告（调试用，App 不显示）。
   final List<String> engineWarnings;
+
+  /// 宿主自己的附加数据：输出顶层 `ext` 的原值（JSON 解码后的对象、数组、字符串或数字），没有时为 null。
+  /// 图表不读、不校验，里面的键也不记「不认识的字段」警告。
+  final Object? ext;
 
   /// 调色板下标 → 颜色；0、越界都返回 null（不画）。
   Color? colorOf(int index) => index > 0 && index < palette.length ? palette[index] : null;
@@ -684,6 +689,8 @@ const _topKeys = {
   'v', 'script', 'symbol', 'period', 'pane', 'precision', 'bars', 'palette', 'series', 'hlines', //
   'fills', 'markers', 'trades', 'bg', 'barColors', 'candles', 'lines', 'boxes', 'labels', 'tables',
   'inputs', 'warnings',
+  // 留给宿主的附加数据，原样放进 ScriptOutput.ext，不解析
+  'ext',
 };
 const _seriesKeys = {
   'pane',
@@ -912,6 +919,7 @@ class _Parser {
       engineWarnings: List.unmodifiable([
         for (final w in _list(json['warnings'], 'warnings')) _str(w),
       ]),
+      ext: json['ext'],
     );
   }
 

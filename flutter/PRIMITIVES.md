@@ -146,7 +146,7 @@ SCHEMA 没规定，参照 TradingView：
 
 - 所有数都按 `num` 读再转换：经过 `google.protobuf.Value` + protojson 后，时间可能是 `1795290000000.0` 或 `1.79529e+12`，颜色下标、宽度、行列号、`count` 也可能是 double，一律取整。数字写成字符串（`"900000"`）也认。键的顺序不影响。
 - `v` 不是 1（含缺失）：整份不画，`error.code == unsupportedVersion`。缺 `bars`、`palette`、`pane`、`script.id` 或值不对：`invalid`。不是 JSON 对象：`notAnObject`。
-- 不认识的字段：跳过，每个字段路径记一条警告。
+- 不认识的字段：跳过，每个字段路径记一条警告。顶层的 `ext` 例外：留给宿主放自己的附加数据（任意 JSON 值），不解析、不记警告，原样放在 `ScriptOutput.ext` 里，点选回调里用 `hit.output.ext` 取。只认顶层，图元里的 `ext` 仍按不认识的字段处理。
 - 不认识的枚举值：决定「画什么」的（序列的 `kind`、标记的 `shape`、成交点的 `side`）跳过这一个元素；决定「怎么画」的（线型、尺寸、对齐、延伸、位置等）退回默认值。都记警告。
 - 颜色下标超出调色板、调色板里不是 `#RRGGBBAA` 的颜色：当作 0（不画），记警告。逐根数组长度和 `bars.count` 不一样：多的截掉、少的补空值，记警告。
 - `fills` 引用了不存在的 id：跳过这一条。
