@@ -10,6 +10,7 @@ import '../chart/chart_layout.dart';
 import '../model/candle.dart';
 import 'script_align.dart';
 import 'script_controller.dart';
+import 'script_hit.dart';
 import 'script_output.dart';
 
 /// 对齐成功的一个脚本：(id, 各对象下标, 输出版本)。
@@ -293,18 +294,62 @@ class ScriptLayersPainter {
     }
   }
 
-  void _paintSub(Canvas c, SubPaneRect pane, ResolvedScript r) {
-    final o = r.output;
-    final contentBottom = pane.contentTop + pane.contentHeight;
+  /// [position] 处点到的图元；没有时为 null。[subPanes] 和 [ids] 同 [paintSubPanes]。
+  ///
+  /// 只看 [position] 所在的那个窗格（主图，或某个脚本副图），按画出来的形状外放 [slop] 判断。
+  /// 几个都点到时：标记、成交、标签优先于线段、水平线，再优先于方框；同一类里取离得最近的，
+  /// 一样近（比如都压在手指下）取画在最上面的（后设置的脚本、同一脚本里后画的）。
+  ScriptHit? hitTest(Offset position, List<SubPaneRect> subPanes, List<String> ids,
+      {double slop = scriptHitSlop}) {
+    final bounds = _BoundsCanvas();
+    _HitCandidate? best;
+    var seq = 0;
+    void scan(String id, ResolvedScript r, _PaneGeom geom, {required bool onMain}) {
+      _ScriptPainter(bounds, layout, geom, r, config, formatter, onMain: onMain)
+          .hitTargets(position, slop, (kind, index, point, distance) {
+        final c = _HitCandidate(id, r.output, onMain, kind, index, point, distance, seq++);
+        if (best == null || c.beats(best!)) best = c;
+      });
+    }
+
+    final main = _PaneGeom.main(layout);
+    if (position.dx >= 0 &&
+        position.dx <= layout.chartWidth &&
+        position.dy >= main.top &&
+        position.dy <= main.bottom) {
+      for (final (id, r, _) in scripts) {
+        if (_hasMainContent(r.output)) scan(id, r, main, onMain: true);
+      }
+    } else {
+      for (var p = 0; p < subPanes.length && p < ids.length; p++) {
+        final pane = subPanes[p];
+        if (pane.height < 1 || position.dy < pane.top || position.dy > pane.bottom) continue;
+        final entry = scripts.where((e) => e.$1 == ids[p]).firstOrNull;
+        if (entry == null) continue;
+        scan(entry.$1, entry.$2, _subGeom(pane, entry.$2), onMain: false);
+      }
+    }
+    return best?.toHit(position);
+  }
+
+  /// 副图脚本窗格的纵向映射：内容区上下沿，纵轴按 [_subRange]。
+  _PaneGeom _subGeom(SubPaneRect pane, ResolvedScript r) {
     final range = _subRange(r);
-    final geom = _PaneGeom(
+    return _PaneGeom(
       top: pane.contentTop,
-      bottom: contentBottom,
+      bottom: pane.contentTop + pane.contentHeight,
       left: 0,
       right: layout.chartWidth,
       min: range.min,
       max: range.max,
     );
+  }
+
+  void _paintSub(Canvas c, SubPaneRect pane, ResolvedScript r) {
+    final o = r.output;
+    final contentBottom = pane.contentTop + pane.contentHeight;
+    final geom = _subGeom(pane, r);
+    final range = (min: geom.min, max: geom.max);
     final text = config.text;
     final colors = config.colors;
     c.save();
@@ -357,6 +402,29 @@ class ScriptLayersPainter {
     }
     canvas.drawPicture(picture);
   }
+}
+
+/// [position] 处点到的脚本图元，规则见 [ScriptLayersPainter.hitTest]。[subPanes] 是脚本副图的窗格，
+/// 和 [ids] 一一对应。
+ScriptHit? hitTestScripts({
+  required ChartLayout layout,
+  required List<Candle> candles,
+  required ScriptPaintConfig config,
+  required ChartFormatter formatter,
+  required List<ScriptEntry> scripts,
+  required List<SubPaneRect> subPanes,
+  required List<String> ids,
+  required Offset position,
+}) {
+  if (scripts.isEmpty) return null;
+  return ScriptLayersPainter(
+    canvas: _BoundsCanvas(),
+    layout: layout,
+    candles: candles,
+    config: config,
+    formatter: formatter,
+    scripts: scripts,
+  ).hitTest(position, subPanes, ids);
 }
 
 /// 副图纵轴要容下的数值：本地下标 [first]..[last] 里的序列（含柱、面积的基线）、水平线、自绘 K 线和各类对象。
@@ -653,6 +721,68 @@ class _ScriptPainter {
     _trackPrices();
   }
 
+  // ---- 点选 ----
+
+  /// 把 [pos] 外放 [slop] 内点得到的图元交给 [add]（类型、序号、标记组内序号、距离），顺序同画的顺序。
+  /// 标记、成交、标签、方框按画出来的外框（裁在价位区里）算距离；线段、水平线按到线的距离减去半个线宽。
+  /// [canvas] 必须是 [_BoundsCanvas]。
+  void hitTargets(Offset pos, double slop,
+      void Function(ScriptHitKind kind, int index, int? point, double distance) add) {
+    final bounds = canvas as _BoundsCanvas;
+    final clip = _valueClip;
+    if (!clip.inflate(slop).contains(pos)) return;
+    void drawn(ScriptHitKind kind, int index, int? point, void Function() paint) {
+      bounds.reset(clip);
+      paint();
+      final b = bounds.bounds;
+      if (b == null) return;
+      final d = _distanceToRect(pos, b);
+      if (d <= slop) add(kind, index, point, d);
+    }
+
+    void line(ScriptHitKind kind, int index, Offset a, Offset b, double width) {
+      if (!clip.contains(pos)) return;
+      final d = math.max(0.0, _distanceToSegment(pos, a, b) - math.max(0.5, width) / 2);
+      if (d <= slop) add(kind, index, null, d);
+    }
+
+    for (var j = 0; j < o.hlines.length; j++) {
+      final h = o.hlines[j];
+      if (!h.visible || !_here(h.mainPane) || o.colorOf(h.color) == null) continue;
+      final yy = y(h.price);
+      line(ScriptHitKind.hline, j, Offset(pane.left, yy), Offset(pane.right, yy), h.width);
+    }
+    for (var g = 0; g < o.markers.length; g++) {
+      final m = o.markers[g];
+      if (!_here(m.mainPane)) continue;
+      final ks = r.markerK[g];
+      for (var j = 0; j < m.length; j++) {
+        drawn(ScriptHitKind.marker, g, j, () => _marker(m, j, ks[j]));
+      }
+    }
+    if (onMain) {
+      for (var j = 0; j < o.trades.length; j++) {
+        drawn(ScriptHitKind.trade, j, null, () => _trade(j));
+      }
+    }
+    for (var j = 0; j < o.boxes.length; j++) {
+      if (_here(o.boxes[j].mainPane)) {
+        drawn(ScriptHitKind.box, j, null, () => _box(o.boxes[j], r.boxK1[j], r.boxK2[j]));
+      }
+    }
+    for (var j = 0; j < o.lines.length; j++) {
+      final l = o.lines[j];
+      if (!_here(l.mainPane) || o.colorOf(l.color) == null) continue;
+      final ends = _segmentEnds(l, r.segK1[j], r.segK2[j]);
+      if (ends != null) line(ScriptHitKind.line, j, ends.$1, ends.$2, l.width);
+    }
+    for (var j = 0; j < o.labels.length; j++) {
+      if (_here(o.labels[j].mainPane)) {
+        drawn(ScriptHitKind.label, j, null, () => _label(o.labels[j], r.labelK[j]));
+      }
+    }
+  }
+
   // ---- 逐根序列 ----
 
   /// 把 [i0]..[i1] 切成同色、连续的段，交给 [emit]（段内是值下标，至少两个点）。
@@ -830,66 +960,70 @@ class _ScriptPainter {
   // ---- 标记和成交点 ----
 
   void _markers(ScriptMarkers m, List<int> ks) {
+    for (var j = 0; j < m.length; j++) {
+      _marker(m, j, ks[j]);
+    }
+  }
+
+  /// 标记组 [m] 里的第 [j] 个点，画在第 [k] 根。
+  void _marker(ScriptMarkers m, int j, int k) {
     final half = halfOf(m.size);
     const gap = 3.0;
-    for (var j = 0; j < m.length; j++) {
-      final k = ks[j];
-      if (!vis.contains(k)) continue;
-      final color = o.colorOf(m.colors[j]);
-      if (color == null) continue;
-      final cx = x(k);
-      final p = m.prices[j];
-      final double anchor;
-      switch (m.location) {
-        case ScriptMarkerLocation.abovebar:
-          if (p.isNaN) continue;
-          anchor = y(p) - gap;
-        case ScriptMarkerLocation.belowbar:
-          if (p.isNaN) continue;
-          anchor = y(p) + gap;
-        case ScriptMarkerLocation.absolute:
-          if (p.isNaN) continue;
-          anchor = y(p);
-        case ScriptMarkerLocation.top:
-          anchor = pane.top + gap;
-        case ScriptMarkerLocation.bottom:
-          anchor = pane.bottom - gap;
-      }
-      // 形状往远离 K 线的方向画：上方的往上长、下方的往下长
-      final up =
-          m.location == ScriptMarkerLocation.abovebar || m.location == ScriptMarkerLocation.bottom;
-      final down =
-          m.location == ScriptMarkerLocation.belowbar || m.location == ScriptMarkerLocation.top;
-      final textColor = m.textColor == 0 && m.text != null ? color : o.colorOf(m.textColor);
-      if (m.shape == ScriptMarkerShape.labelup || m.shape == ScriptMarkerShape.labeldown) {
-        _bubble(
-          m.text ?? '',
-          Offset(cx, anchor),
-          m.shape == ScriptMarkerShape.labelup
-              ? ScriptLabelStyle.labelUp
-              : ScriptLabelStyle.labelDown,
-          color,
-          textColor,
-          fontOf(m.size == ScriptSize.auto ? ScriptSize.small : m.size),
-          ScriptHAlign.center,
-        );
-        continue;
-      }
-      final cy = up ? anchor - half : (down ? anchor + half : anchor);
-      if (m.shape == ScriptMarkerShape.char) {
-        final glyph = text.layout(m.char ?? '•', half * 2.4, color);
-        glyph.paint(canvas, Offset(cx - glyph.width / 2, cy - glyph.height / 2));
-      } else {
-        _shape(_markerShape(m.shape), Offset(cx, cy), half, color);
-      }
-      final t = m.text;
-      if (t != null && textColor != null) {
-        final tp = text.layout(t, fontOf(ScriptSize.small), textColor);
-        final ty = down || m.location == ScriptMarkerLocation.bottom
-            ? cy + half + 2
-            : cy - half - 2 - tp.height;
-        tp.paint(canvas, Offset(cx - tp.width / 2, ty));
-      }
+    if (!vis.contains(k)) return;
+    final color = o.colorOf(m.colors[j]);
+    if (color == null) return;
+    final cx = x(k);
+    final p = m.prices[j];
+    final double anchor;
+    switch (m.location) {
+      case ScriptMarkerLocation.abovebar:
+        if (p.isNaN) return;
+        anchor = y(p) - gap;
+      case ScriptMarkerLocation.belowbar:
+        if (p.isNaN) return;
+        anchor = y(p) + gap;
+      case ScriptMarkerLocation.absolute:
+        if (p.isNaN) return;
+        anchor = y(p);
+      case ScriptMarkerLocation.top:
+        anchor = pane.top + gap;
+      case ScriptMarkerLocation.bottom:
+        anchor = pane.bottom - gap;
+    }
+    // 形状往远离 K 线的方向画：上方的往上长、下方的往下长
+    final up =
+        m.location == ScriptMarkerLocation.abovebar || m.location == ScriptMarkerLocation.bottom;
+    final down =
+        m.location == ScriptMarkerLocation.belowbar || m.location == ScriptMarkerLocation.top;
+    final textColor = m.textColor == 0 && m.text != null ? color : o.colorOf(m.textColor);
+    if (m.shape == ScriptMarkerShape.labelup || m.shape == ScriptMarkerShape.labeldown) {
+      _bubble(
+        m.text ?? '',
+        Offset(cx, anchor),
+        m.shape == ScriptMarkerShape.labelup
+            ? ScriptLabelStyle.labelUp
+            : ScriptLabelStyle.labelDown,
+        color,
+        textColor,
+        fontOf(m.size == ScriptSize.auto ? ScriptSize.small : m.size),
+        ScriptHAlign.center,
+      );
+      return;
+    }
+    final cy = up ? anchor - half : (down ? anchor + half : anchor);
+    if (m.shape == ScriptMarkerShape.char) {
+      final glyph = text.layout(m.char ?? '•', half * 2.4, color);
+      glyph.paint(canvas, Offset(cx - glyph.width / 2, cy - glyph.height / 2));
+    } else {
+      _shape(_markerShape(m.shape), Offset(cx, cy), half, color);
+    }
+    final t = m.text;
+    if (t != null && textColor != null) {
+      final tp = text.layout(t, fontOf(ScriptSize.small), textColor);
+      final ty = down || m.location == ScriptMarkerLocation.bottom
+          ? cy + half + 2
+          : cy - half - 2 - tp.height;
+      tp.paint(canvas, Offset(cx - tp.width / 2, ty));
     }
   }
 
@@ -985,35 +1119,40 @@ class _ScriptPainter {
 
   void _trades() {
     if (o.trades.isEmpty) return;
+    for (var j = 0; j < o.trades.length; j++) {
+      _trade(j);
+    }
+  }
+
+  /// 第 [j] 笔成交。
+  void _trade(int j) {
     final s = (cw * 0.35).clamp(3.0, 6.0).toDouble();
     final colors = config.colors;
     final showText = cw >= 6;
-    for (var j = 0; j < o.trades.length; j++) {
-      final k = r.tradeK[j];
-      if (!vis.contains(k)) continue;
-      final t = o.trades[j];
-      final buy = t.side == ScriptTradeSide.buy;
-      final color = buy ? colors.buy : colors.sell;
-      final cx = x(k), ty = y(t.price);
-      // 买：三角朝上、尖顶在成交价；卖：朝下
-      final base = buy ? ty + s * 1.6 : ty - s * 1.6;
-      final tri = Path()
-        ..moveTo(cx, ty)
-        ..lineTo(cx + s, base)
-        ..lineTo(cx - s, base)
-        ..close();
-      if (t.kind == ScriptTradeKind.entry) {
-        canvas.drawPath(tri, _fill..color = color);
-      } else {
-        _stroke
-          ..color = color
-          ..strokeWidth = 1.2;
-        canvas.drawPath(tri, _stroke);
-      }
-      if (showText && t.id.isNotEmpty) {
-        final tp = text.layout(t.id, fontOf(ScriptSize.tiny), color);
-        tp.paint(canvas, Offset(cx - tp.width / 2, buy ? base + 1 : base - 1 - tp.height));
-      }
+    final k = r.tradeK[j];
+    if (!vis.contains(k)) return;
+    final t = o.trades[j];
+    final buy = t.side == ScriptTradeSide.buy;
+    final color = buy ? colors.buy : colors.sell;
+    final cx = x(k), ty = y(t.price);
+    // 买：三角朝上、尖顶在成交价；卖：朝下
+    final base = buy ? ty + s * 1.6 : ty - s * 1.6;
+    final tri = Path()
+      ..moveTo(cx, ty)
+      ..lineTo(cx + s, base)
+      ..lineTo(cx - s, base)
+      ..close();
+    if (t.kind == ScriptTradeKind.entry) {
+      canvas.drawPath(tri, _fill..color = color);
+    } else {
+      _stroke
+        ..color = color
+        ..strokeWidth = 1.2;
+      canvas.drawPath(tri, _stroke);
+    }
+    if (showText && t.id.isNotEmpty) {
+      final tp = text.layout(t.id, fontOf(ScriptSize.tiny), color);
+      tp.paint(canvas, Offset(cx - tp.width / 2, buy ? base + 1 : base - 1 - tp.height));
     }
   }
 
@@ -1067,13 +1206,33 @@ class _ScriptPainter {
   void _segment(ScriptSegment l, int k1, int k2) {
     final c = o.colorOf(l.color);
     if (c == null) return;
+    final drawn = _segmentEnds(l, k1, k2);
+    if (drawn == null) return;
+    final (a, b) = drawn;
+    final ends = (Offset(x(k1), y(l.p1)), Offset(x(k2), y(l.p2)));
+    final style = switch (l.style) {
+      ScriptSegmentStyle.dashed => ScriptLineStyle.dashed,
+      ScriptSegmentStyle.dotted => ScriptLineStyle.dotted,
+      _ => ScriptLineStyle.solid,
+    };
+    _styledLine(a, b, c, l.width, style);
+    final head = 4 + 2 * l.width;
+    if (l.style == ScriptSegmentStyle.arrowRight || l.style == ScriptSegmentStyle.arrowBoth) {
+      _arrowHead(ends.$1, ends.$2, head, c);
+    }
+    if (l.style == ScriptSegmentStyle.arrowLeft || l.style == ScriptSegmentStyle.arrowBoth) {
+      _arrowHead(ends.$2, ends.$1, head, c);
+    }
+  }
+
+  /// 线段画出来的两端：往外延伸的已延伸到窗格左右边外；整段在可见范围外时为 null。
+  (Offset, Offset)? _segmentEnds(ScriptSegment l, int k1, int k2) {
     final extL = l.extend == ScriptExtend.left || l.extend == ScriptExtend.both;
     final extR = l.extend == ScriptExtend.right || l.extend == ScriptExtend.both;
-    if (!extR && math.min(k1, k2) > vis.last) return;
-    if (!extL && math.max(k1, k2) < vis.first) return;
+    if (!extR && math.min(k1, k2) > vis.last) return null;
+    if (!extL && math.max(k1, k2) < vis.first) return null;
     var a = Offset(x(k1), y(l.p1));
     var b = Offset(x(k2), y(l.p2));
-    final ends = (a, b);
     if (extL || extR) {
       final dx = b.dx - a.dx;
       if (dx.abs() < 1e-6) {
@@ -1094,19 +1253,7 @@ class _ScriptPainter {
         b = nr;
       }
     }
-    final style = switch (l.style) {
-      ScriptSegmentStyle.dashed => ScriptLineStyle.dashed,
-      ScriptSegmentStyle.dotted => ScriptLineStyle.dotted,
-      _ => ScriptLineStyle.solid,
-    };
-    _styledLine(a, b, c, l.width, style);
-    final head = 4 + 2 * l.width;
-    if (l.style == ScriptSegmentStyle.arrowRight || l.style == ScriptSegmentStyle.arrowBoth) {
-      _arrowHead(ends.$1, ends.$2, head, c);
-    }
-    if (l.style == ScriptSegmentStyle.arrowLeft || l.style == ScriptSegmentStyle.arrowBoth) {
-      _arrowHead(ends.$2, ends.$1, head, c);
-    }
+    return (a, b);
   }
 
   /// 在 [to] 处画一个从 [from] 指向 [to] 的实心箭头。
@@ -1353,4 +1500,153 @@ class _ScriptPainter {
     canvas.drawPath(dashed, _stroke);
     _stroke.strokeCap = StrokeCap.butt;
   }
+}
+
+double _distanceToRect(Offset p, Rect r) {
+  final dx = math.max(0.0, math.max(r.left - p.dx, p.dx - r.right));
+  final dy = math.max(0.0, math.max(r.top - p.dy, p.dy - r.bottom));
+  return math.sqrt(dx * dx + dy * dy);
+}
+
+double _distanceToSegment(Offset p, Offset a, Offset b) {
+  final ab = b - a;
+  final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
+  if (len2 < 1e-12) return (p - a).distance;
+  final t = (((p.dx - a.dx) * ab.dx + (p.dy - a.dy) * ab.dy) / len2).clamp(0.0, 1.0);
+  return (p - (a + ab * t)).distance;
+}
+
+/// 点选的一个候选。
+class _HitCandidate {
+  _HitCandidate(this.scriptId, this.output, this.onMain, this.kind, this.index, this.point,
+      this.distance, this.seq);
+
+  final String scriptId;
+  final ScriptOutput output;
+  final bool onMain;
+  final ScriptHitKind kind;
+  final int index;
+  final int? point;
+  final double distance;
+
+  /// 画的先后：越大画得越晚（在上面）。
+  final int seq;
+
+  static int _rank(ScriptHitKind k) => switch (k) {
+        ScriptHitKind.marker || ScriptHitKind.trade || ScriptHitKind.label => 0,
+        ScriptHitKind.line || ScriptHitKind.hline => 1,
+        ScriptHitKind.box => 2,
+      };
+
+  bool beats(_HitCandidate other) {
+    final a = _rank(kind), b = _rank(other.kind);
+    if (a != b) return a < b;
+    if (distance != other.distance) return distance < other.distance;
+    return seq > other.seq;
+  }
+
+  ScriptHit toHit(Offset position) {
+    final o = output;
+    final pane = onMain ? ScriptPane.main : ScriptPane.sub;
+    ScriptHit hit({String? id, int? time, double? price, int? time2, double? price2}) => ScriptHit(
+          scriptId: scriptId,
+          output: o,
+          kind: kind,
+          index: index,
+          point: point,
+          pane: pane,
+          position: position,
+          id: id,
+          time: time,
+          price: price,
+          time2: time2,
+          price2: price2,
+        );
+    switch (kind) {
+      case ScriptHitKind.marker:
+        final m = o.markers[index];
+        final p = m.prices[point!];
+        return hit(time: m.times[point!], price: p.isNaN ? null : p);
+      case ScriptHitKind.trade:
+        final t = o.trades[index];
+        return hit(id: t.id, time: t.time, price: t.price);
+      case ScriptHitKind.label:
+        final l = o.labels[index];
+        return hit(time: l.time, price: l.price);
+      case ScriptHitKind.line:
+        final l = o.lines[index];
+        return hit(time: l.t1, price: l.p1, time2: l.t2, price2: l.p2);
+      case ScriptHitKind.hline:
+        final h = o.hlines[index];
+        return hit(id: h.id, price: h.price);
+      case ScriptHitKind.box:
+        final b = o.boxes[index];
+        return hit(time: b.t1, price: b.top, time2: b.t2, price2: b.bottom);
+    }
+  }
+}
+
+/// 只记外框的画布：点选时把图元按原来的画法跑一遍，得到它画出来的范围（裁在当前裁剪区里）。
+/// 只实现脚本图元用到的绘制调用，其余调用什么都不做。
+class _BoundsCanvas implements Canvas {
+  Rect? bounds;
+  Rect _clip = Rect.largest;
+  final List<Rect> _saved = [];
+
+  void reset(Rect clip) {
+    bounds = null;
+    _clip = clip;
+    _saved.clear();
+  }
+
+  void _add(Rect r, Paint paint) {
+    final rect = paint.style == PaintingStyle.stroke ? r.inflate(paint.strokeWidth / 2) : r;
+    if (!rect.overlaps(_clip)) return;
+    final c = rect.intersect(_clip);
+    bounds = bounds == null ? c : bounds!.expandToInclude(c);
+  }
+
+  @override
+  void save() => _saved.add(_clip);
+
+  @override
+  void restore() {
+    if (_saved.isNotEmpty) _clip = _saved.removeLast();
+  }
+
+  @override
+  void clipRect(Rect rect, {ClipOp clipOp = ClipOp.intersect, bool doAntiAlias = true}) {
+    if (clipOp == ClipOp.intersect) {
+      _clip = _clip.overlaps(rect) ? _clip.intersect(rect) : Rect.zero;
+    }
+  }
+
+  @override
+  void drawRect(Rect rect, Paint paint) => _add(rect, paint);
+
+  @override
+  void drawRRect(RRect rrect, Paint paint) => _add(rrect.outerRect, paint);
+
+  @override
+  void drawPath(Path path, Paint paint) => _add(path.getBounds(), paint);
+
+  @override
+  void drawCircle(Offset c, double radius, Paint paint) =>
+      _add(Rect.fromCircle(center: c, radius: radius), paint);
+
+  @override
+  void drawLine(Offset p1, Offset p2, Paint paint) =>
+      _add(Rect.fromPoints(p1, p2).inflate(paint.strokeWidth / 2), _area);
+
+  @override
+  void drawParagraph(Paragraph paragraph, Offset offset) => _add(
+      offset &
+          Size(
+              paragraph.width.isFinite ? paragraph.width : paragraph.longestLine, paragraph.height),
+      _area);
+
+  static final Paint _area = Paint();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }

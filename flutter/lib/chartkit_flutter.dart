@@ -24,4 +24,5 @@ export 'src/drawing/drawing_theme.dart';
 export 'src/script/script_align.dart'
     show ScriptAlignment, ScriptAlignmentIssue, ScriptAlignmentProblem, alignScriptOutput;
 export 'src/script/script_controller.dart';
+export 'src/script/script_hit.dart';
 export 'src/script/script_output.dart';

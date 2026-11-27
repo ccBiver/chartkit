@@ -59,6 +59,38 @@ for (final v in values) {
 
 返回各脚本可见序列在这一根的值，脚本按设置顺序、序列按输出里的顺序。`visible: false`（只当填充边界）和 `legend: false` 的序列不返回；对不上 K 线的脚本不返回。图例和十字光标数值的界面由 App 自己画，图表只在副图左上角写脚本名。
 
+## 点选
+
+传 `onScriptTap` 后，点到标记、策略成交点、标签、线段、水平线、方框时回调。不传时不做点选，点击和原来完全一样。
+
+```dart
+KLineChart(
+  state: state,
+  scriptOutputs: scripts,
+  onScriptTap: (hit) {
+    // hit.scriptId, hit.kind, hit.index（标记还有 hit.point）, hit.pane
+    // hit.time, hit.price（锚点）, hit.time2, hit.price2（线段、方框的另一端）, hit.position（点击位置）
+    if (hit.kind == ScriptHitKind.marker) showSignal(hit.time, hit.price);
+    if (hit.kind == ScriptHitKind.hline) highlight(hit.output.hlines[hit.index].id);
+  },
+);
+```
+
+| 类型 | 序号 | `id` | 锚点 `time` / `price` | `time2` / `price2` |
+|---|---|---|---|---|
+| `marker` | `index` 是 `markers` 的组，`point` 是组内的点 | — | 那个点的时间和价位（`top`、`bottom` 位置没有价位，为 null） | — |
+| `trade` | `trades` 序号 | 成交的 `id` | 成交时间和成交价 | — |
+| `label` | `labels` 序号 | — | `t`、`p` | — |
+| `line` | `lines` 序号 | — | `t1`、`p1` | `t2`、`p2` |
+| `hline` | `hlines` 序号 | 水平线的 `id` | 时间为 null，价格是 `price` | — |
+| `box` | `boxes` 序号 | — | `t1`、`top` | `t2`、`bottom` |
+
+原图元用 `hit.output` 取，例如 `hit.output.labels[hit.index].tooltip`。
+
+- 命中范围：图元画出来的形状再往外放 `scriptHitSlop`（12 逻辑像素）。标记、成交、标签、方框按画出来的外框（含文字，裁在价位区里，被裁掉的部分点不到）；线段、水平线按到线的距离。只看点击所在的窗格（主图或某个脚本副图），曲线、柱、点、填充、背景色、自绘 K 线、表格不参与。
+- 几个图元都点到时只回调一个：标记、成交、标签优先于线段、水平线，再优先于方框；同一类里取离得最近的；一样近（比如都压在手指下）取画在上面的，即后设置的脚本、同一脚本里后画的。
+- 和其他手势：点击依次交给回放选起点、画线（选了画线工具时落点；点中画线时选中；有画线选中时点空白只取消选中）、常驻的十字光标（显示着时这次点击只关掉它），之后才看脚本图元。点到了就不再触发 `onTradeMarkTap` 和点击唤出十字光标（`CrosshairTrigger.tapOrLongPress`）；没点到时照原来的顺序走。长按、拖动、缩放不受影响。
+
 ## 对齐
 
 完全按 SCHEMA「约定」一节：
@@ -136,6 +168,7 @@ SCHEMA 没规定，参照 TradingView：
 - `ChartRenderer.drawCandles`：新增可选参数 `colorOf`，K 线改色用。
 - `KLineChartPainter`：背景色画在 K 线下面，其余主图图元画在主图指标之后、最高最低价标注之前（不传时顺序和原来一样），副图脚本画在内置副图之后、时间轴之前。
 - `ChartFrameSource`（内部接口）：新增 `scriptPaneIds`、`scriptPaneWeights`。
+- 点选（只在传了 `onScriptTap` 时生效）：`KLineChart` 新增参数 `onScriptTap`；`ChartGestures` 的点击在关掉十字光标之后、买卖标记之前先问脚本图元。
 
 ## 没做的、和 SCHEMA 不一致的
 
@@ -163,6 +196,7 @@ SCHEMA 没规定，参照 TradingView：
 | `test/script/real_pane_test.dart` | 用服务端脚本引擎修复 display 和 force_overlay 后的真样本：6 个副图脚本的副图纵轴（全部 1000 根）和引擎输出里各窗格的数值范围一致；画到主图的曲线和自绘 K 线不超出 K 线范围；趋势衰竭的方框、标记、表格，已实现方差的自绘 K 线，大周期面板的线段，卡尔曼滤波的曲线、圆点标签、背景色和表格都画在主图，位置用「同一份输出渲染两次、只把目标图元改成不画、取差异」的办法和独立公式核对 |
 | `test/script/lone_value_test.dart` | 断开曲线上的孤立值：开头、中间、结尾都不画、不算进主图价格区间和副图纵轴；面积和阶梯线同样处理；`connect` 曲线和点不受影响；ML 超级趋势真样本滚到最早一屏时价格轴不再到 0 |
 | `test/script/update_test.dart` | 替换副图脚本只重录它的窗格；替换主图脚本只重录受影响的；十字光标不重录；替换后下一帧就是新内容；移除副图收起窗格；末根原地更新不重新对齐 |
+| `test/script/script_tap_test.dart` | 点选：六类图元的类型、序号、锚点和点击位置，脚本副图；外放范围的边界；标记压在方框里、水平线穿过方框、两条水平线、两个标签、两个脚本重叠时选哪个；不传回调、点空白、常驻十字光标、长按、画线工具、画线和脚本水平线重合、买卖标记时的先后；传不传回调画面逐像素一样 |
 | `test/script/benchmark_test.dart` | 解析耗时、500 个标签首次排版、一帧的绘制耗时 |
 | `test/baseline/script_off_golden_test.dart` | 空控制器、设置了输出但隐藏：7 个场景都和基线 9d3ee15 的参考图逐像素一致 |
 

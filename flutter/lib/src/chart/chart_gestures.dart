@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
+import '../script/script_hit.dart';
 import 'chart_layout.dart';
 import 'chart_painter.dart';
 import 'chart_renderer.dart';
@@ -26,14 +27,17 @@ class ChartGestures {
     required TickerProvider vsync,
     required KLineChart Function() widgetOf,
     required ChartLayout? Function() layoutOf,
+    ScriptHit? Function(Offset position)? scriptHitAt,
   })  : _widgetOf = widgetOf,
         _layoutOf = layoutOf,
+        _scriptHitAt = scriptHitAt,
         _fling = AnimationController.unbounded(vsync: vsync) {
     _fling.addListener(_onFlingTick);
   }
 
   final KLineChart Function() _widgetOf;
   final ChartLayout? Function() _layoutOf;
+  final ScriptHit? Function(Offset position)? _scriptHitAt;
   final AnimationController _fling;
 
   /// 本次拖动/缩放是否仅用于关闭十字光标（不滚动）。
@@ -149,6 +153,10 @@ class ChartGestures {
   void onTapUp(TapUpDetails details) {
     if (pickReplayStart(details.localPosition)) return;
     if (_state.crosshairIndex >= 0) return clearCrosshair(); // 常驻浮窗：点击空白处消失
+    // 点到脚本图元：交给宿主，不再看买卖标记、不唤出十字光标
+    final onScriptTap = _widget.onScriptTap;
+    final hit = onScriptTap == null ? null : _scriptHitAt?.call(details.localPosition);
+    if (hit != null) return onScriptTap!(hit);
     // 松手即消失模式：点击蜡烛上的买卖标记 → 回调
     final mark = _widget.crosshairDismiss == CrosshairDismiss.onRelease
         ? _tradeMarkAt(details.localPosition.dx)
